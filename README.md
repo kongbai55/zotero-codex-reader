@@ -14,9 +14,9 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.1.0.xpi`.
-5. Open a PDF in Zotero, expand the right sidebar, and click the green code icon to find **Codex Reader**.
-6. Click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
+4. Select `dist/zotero-codex-reader-0.3.0.xpi`.
+5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
+6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
 
 ### Compatibility
 
@@ -39,6 +39,18 @@ Automatic background updates are disabled for this plugin at startup. Manual upd
 
 ## Features
 
+### 0.3.0: Full Reading Panel
+
+The Codex icon opens a full-height panel over Zotero's right content area, including its native header. Only chat content scrolls; the underlying item modules cannot receive focus while covered. The panel stays within the available width, leaving the icon rail accessible. Click another module icon or **×** to return to Zotero. Each paper retains its own conversation and draft.
+
+### 0.2.1: Reader Sidebar Fix
+
+Fixes the blank reader panel and text overflowing beside the navigation icon. Fluent translations now target label and tooltip attributes, preserving the custom section DOM. Restart Zotero after updating to reload the localization resources.
+
+### Codex-style Reading Workspace
+
+A collapsible conversation list, uncluttered message area, and rounded composer fixed below the scrolling messages. Paper context opens in an editable panel; connection settings, copying the full conversation, and saving notes are available under **⋯**. Wide panels show history beside the chat, while narrow panels use a drawer. Light and dark appearance follow the system. This is an independent Zotero interface inspired by Codex, not an embedded copy of the desktop app.
+
 ### Read and Ask Questions About Papers
 
 **Selected-text context**
@@ -49,7 +61,7 @@ The selected text is added to your local context draft. No request is sent at th
 
 **Editable paper context**
 
-Expand the **Paper Context to Send** section to inspect, edit, or remove content before sending it to Codex.
+Click **Paper Context (+)** beside the composer to inspect, edit, or remove content before sending it to Codex.
 
 **PDF text extraction**
 
@@ -112,7 +124,7 @@ It does not copy or overwrite your Codex configuration.
 
 The plugin can retrieve existing Codex conversations through `thread/list`.
 
-Open **Connection Settings & Existing Conversations → Load Codex History**, select a conversation, and choose **Continue in Branch**.
+Open the conversation list with the top-left sidebar button, click **Load Codex History**, then click a conversation to continue in a new branch.
 
 This creates a new conversational branch while preserving the original conversation.
 
@@ -223,7 +235,7 @@ No comprehensive security audit of that project has been performed here. Privacy
 
 ### Codex Executable Not Found
 
-Open **Connection Settings & Existing Conversations** in the sidebar and manually specify the full Codex executable path.
+Open **Settings (⋯)** in the sidebar and manually specify the full Codex executable path.
 
 For a typical Windows npm installation:
 

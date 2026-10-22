@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Codex Reader · 界面预览</title>
+<style>
+body{margin:0;background:#e9e9e6;color:#282828;font:13px system-ui;display:flex;justify-content:center;min-height:100vh}
+.preview{width:760px;max-width:100%;background:white;box-shadow:0 0 0 1px #ddd;}
+.tools{height:62px;display:flex;align-items:center;gap:8px;padding:0 16px;background:#f5f5f3;flex-wrap:wrap;}
+.tools button{padding:5px 9px;background:white;border:1px solid #ddd;border-radius:5px;cursor:pointer;}
+.tools span{flex:1;font-size:11px;color:#777;}
+#mount .cr-root{height:calc(100vh - 62px);border-radius:0}
+@media(prefers-color-scheme:dark){body{background:#131313;color:#eee}.preview,.tools{background:#222}.tools button{background:#333;color:white;border-color:#555}}
+</style>
+<div class="preview"><div class="tools"><span>本地预览 · 示例数据，不连接 Codex</span><button id="narrow">窄栏</button><button id="wide">宽栏</button><button id="sample">示例对话</button><button id="empty">空白对话</button></div><div id="mount"></div></div>
+<script src="core.js"></script><script>
+var Services={prefs:{getStringPref:()=>'',setStringPref(){}}};
+var copied='';
+var paper={id:1,libraryID:1,getField:()=> 'Beyond Single-shot Writing: Multi-turn Report Revision',isAttachment:()=>false};
+var attachment={id:2,parentID:1,attachmentContentType:'application/pdf',isAttachment:()=>true};
+var Zotero={Items:{get:id=>id===1?paper:attachment},Reader:{_readers:[]},Utilities:{Internal:{copyTextToClipboard:text=>{copied=text;}}},PDFWorker:{getFullText:async()=>({text:'A locally extracted demonstration paragraph. Agents are evaluated on iterative revisions.',extractedPages:1,totalPages:1})}};
+var CodexReaderHost={sessions:new Map(),models:[{id:'demo-model',model:'demo-model',displayName:'示例模型'}],status:'已连接 · 使用现有 Codex 配置（演示）',accountReady:true,rpc:{closed:false},
+emit(){CodexReaderUI.update(view);},connect:async()=>CodexReaderHost.rpc,
+clearSession(){this.sessions.clear();this.emit();},
+listHistory:async()=>[{id:'one',name:'论文方法与实验设计'},{id:'two',name:'机器人导航 · 研究笔记'},{id:'three',name:'整理文献中的关键结论'}],
+forkHistory:async()=>{sample();},getSession(){return {send:async(input)=>{this.sessions.set('2',{messages:[{role:'user',text:input.question,context:input.context},{role:'assistant',text:'这是界面演示，不会请求真实模型。',status:'completed'}]});this.emit();}};}};
+</script><script src="sidebar.js"></script><script>
+CodexReaderUI.rootURI='./';
+// Use production renderer and styles with a local fixture host.
+CodexReaderUI.render({body:document.getElementById('mount'),item:attachment,doc:document});
+var view=CodexReaderUI.views.get(document.getElementById('mount'));
+function sample(){CodexReaderHost.sessions.set('2',{messages:[{role:'user',text:'这篇论文的核心问题是什么？它如何评估多轮修改？',context:'Example excerpt'},{role:'assistant',text:'这篇论文关注一个实际问题：研究代理写出第一版报告后，能否根据反馈持续改进？\n\n作者把评估重点放在多轮修改中，观察代理能否修正反馈指出的问题，同时保留原有内容的准确性与完整性。\n\n阅读时可以重点关注三个部分：\n\n1. 反馈如何构建，是否接近实际的修改需求。\n2. 修改后哪些内容得到了改善，哪些内容出现了退步。\n3. 评估结果能否推广到其他研究任务。\n\n目前仅有示例选文，尚不能据此判断全部实验结论。',status:'completed'}]});CodexReaderHost.emit();}
+document.getElementById('sample').onclick=sample;
+document.getElementById('empty').onclick=()=>CodexReaderHost.clearSession();
+document.getElementById('narrow').onclick=()=>document.querySelector('.preview').style.width='320px';
+document.getElementById('wide').onclick=()=>document.querySelector('.preview').style.width='760px';
+</script></html>

@@ -1,24 +1,90 @@
-.cr-root { --cr-accent:#176b54; --cr-border:color-mix(in srgb, currentColor 18%, transparent); font:13px/1.55 system-ui,sans-serif; color:inherit; min-width:0; padding:8px 2px; }
-.cr-root * { box-sizing:border-box; }
-.cr-root .cr-title {font-weight:650; overflow-wrap:anywhere; margin-bottom:8px;}
-.cr-root button,.cr-root input,.cr-root select,.cr-root textarea {font:inherit; color:inherit; border:1px solid var(--cr-border); border-radius:6px; background:var(--material-background,transparent); padding:6px 9px; max-width:100%;}
-.cr-root button {cursor:pointer; min-height:30px;}
-.cr-root button:hover {background:color-mix(in srgb,var(--cr-accent) 12%,transparent);}
-.cr-root button:disabled {opacity:.5; cursor:default;}
-.cr-root button:focus-visible,.cr-root textarea:focus-visible,.cr-root input:focus-visible,.cr-root select:focus-visible {outline:2px solid var(--cr-accent); outline-offset:2px;}
-.cr-root input,.cr-root textarea,.cr-root select {width:100%; margin:5px 0;}
-.cr-root textarea {resize:vertical; white-space:pre-wrap;}
-.cr-root .cr-toolbar {display:flex; gap:6px; flex-wrap:wrap; margin:7px 0; align-items:center;}
-.cr-root .cr-send {background:var(--cr-accent); color:#fff; border-color:var(--cr-accent); padding-inline:20px;}
-.cr-root .cr-send:hover {background:#125540;}
-.cr-root .cr-status {font-size:12px; color:var(--cr-accent); overflow-wrap:anywhere;}
-.cr-root .cr-log {height:350px; min-height:150px; max-height:85vh; resize:vertical; overflow:auto; border:1px solid var(--cr-border); border-radius:9px; margin:10px 0; padding:8px;}
-.cr-root .cr-message {padding:10px; border-radius:7px; margin-bottom:10px; border:1px solid var(--cr-border); overflow-wrap:anywhere;}
-.cr-root .cr-user {background:color-mix(in srgb,var(--cr-accent) 8%,transparent);}
-.cr-root .cr-text {white-space:pre-wrap; margin-top:5px;}
-.cr-root .cr-small {font-size:11px; opacity:.75; white-space:pre-wrap; overflow-wrap:anywhere;}
-.cr-root .cr-empty {opacity:.65; white-space:pre-wrap; padding:8px;}
-.cr-root .cr-error {color:#b53838; white-space:pre-wrap; overflow-wrap:anywhere; margin:6px 0;}
-.cr-root details {border:1px solid var(--cr-border); border-radius:7px; margin:8px 0; padding:7px;}
-.cr-root summary {cursor:pointer; font-size:12px; font-weight:550;}
-@media (prefers-color-scheme:dark) {.cr-root {--cr-accent:#76c9ac;} .cr-root .cr-send {background:#176b54; color:white;} .cr-root .cr-error {color:#ff9696;}}
+.cr-root {
+  --cr-bg:#fff; --cr-nav:#f7f7f5; --cr-text:#252525; --cr-muted:#777873;
+  --cr-border:#e6e6e2; --cr-hover:#efefec; --cr-bubble:#f1f1ee; --cr-accent:#242424;
+  container-type:inline-size; font:13px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:var(--cr-text); background:var(--cr-bg); min-width:0;
+  height:calc(100vh - 180px); min-height:380px; overflow:hidden; border-radius:10px;
+}
+.cr-root * {box-sizing:border-box;}
+.cr-reader-overlay {box-sizing:border-box;isolation:isolate;overscroll-behavior:none;}
+.cr-root.cr-full-panel {width:100%;max-width:100%;height:100%;min-height:0;margin:0;padding:0;border:0;border-radius:0;}
+.cr-root .cr-exit {display:none;}
+.cr-root.cr-full-panel .cr-exit {display:block;}
+.cr-root .cr-shell,.cr-root .cr-header,.cr-root .cr-bottom,.cr-root .cr-composer {min-width:0;max-width:100%;}
+.cr-root [hidden] {display:none !important;}
+.cr-root button,.cr-root input,.cr-root select,.cr-root textarea {font:inherit;color:inherit;max-width:100%;}
+.cr-root button {border:0;background:transparent;border-radius:7px;padding:6px 10px;cursor:pointer;min-height:32px;}
+.cr-root button:hover {background:var(--cr-hover);}
+.cr-root button:disabled {opacity:.45;cursor:default;}
+.cr-root :is(button,textarea,input,select,summary):focus-visible {outline:2px solid #6b91ba;outline-offset:2px;}
+.cr-root .cr-shell {display:grid;grid-template-columns:minmax(0,1fr);height:100%;position:relative;}
+.cr-root .cr-main {min-width:0;min-height:0;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;position:relative;overflow:hidden;}
+.cr-root .cr-header {display:flex;gap:6px;align-items:center;padding:10px 12px;}
+.cr-root .cr-brand {font-size:15px;font-weight:600;flex:1;}
+.cr-root .cr-icon {font-size:19px;width:32px;height:32px;padding:0;line-height:1;flex-shrink:0;}
+.cr-root .cr-new {font-size:12px;white-space:nowrap;}
+.cr-root .cr-heading {padding:0 20px 12px;min-width:0;}
+.cr-root .cr-title {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500;}
+.cr-root .cr-status {font-size:11px;color:var(--cr-muted);overflow-wrap:anywhere;min-height:18px;}
+.cr-root .cr-conversation {display:flex;min-height:0;min-width:0;overflow:hidden;}
+.cr-root .cr-log {flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:18px 22px;scrollbar-width:thin;}
+.cr-root .cr-message {max-width:100%;margin:0 0 26px;overflow-wrap:anywhere;}
+.cr-root .cr-message > strong {display:block;font-size:11px;font-weight:600;margin-bottom:8px;}
+.cr-root .cr-user {width:fit-content;max-width:88%;margin-left:auto;background:var(--cr-bubble);border-radius:16px;padding:10px 14px;}
+.cr-root .cr-user > strong {display:none;}
+.cr-root .cr-text {white-space:pre-wrap;line-height:1.8;}
+.cr-root .cr-copy-message {font-size:11px;color:var(--cr-muted);padding:2px 6px;margin:6px 0 0 -6px;min-height:26px;}
+.cr-root .cr-welcome {margin:auto;width:100%;padding:30px 18px;text-align:center;overflow:auto;max-height:100%;}
+.cr-root .cr-welcome-mark {display:flex;justify-content:center;margin-bottom:12px;line-height:1;}
+.cr-root .cr-welcome h2 {font-size:21px;font-weight:550;letter-spacing:-.5px;margin:0 0 8px;}
+.cr-root .cr-welcome p {font-size:12px;color:var(--cr-muted);margin:0 0 20px;}
+.cr-root .cr-welcome .cr-toolbar {justify-content:center;gap:8px;}
+.cr-root .cr-welcome button {border:1px solid var(--cr-border);font-size:12px;padding:6px 14px;border-radius:9px;}
+.cr-root .cr-bottom {padding:8px 14px 10px;min-width:0;background:var(--cr-bg);}
+.cr-root .cr-composer {border:1px solid var(--cr-border);border-radius:19px;background:var(--cr-bg);padding:10px;box-shadow:0 2px 9px #00000006;}
+.cr-root .cr-composer:focus-within {border-color:#b4b4ad;}
+.cr-root .cr-composer textarea {display:block;width:100%;resize:none;border:0;box-shadow:none;background:transparent;outline:none;padding:4px 6px 8px;min-height:54px;max-height:150px;overflow-y:auto;}
+.cr-root .cr-composer textarea::placeholder {color:var(--cr-muted);}
+.cr-root .cr-composer-bar {display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.cr-root .cr-context-toggle {color:var(--cr-muted);font-size:11px;padding:4px 5px;max-width:100%;text-align:left;}
+.cr-root .cr-composer select {width:auto;min-width:0;max-width:calc(100% - 50px);flex:1;border:0;background:var(--cr-bg);padding:4px 2px;font-size:11px;text-overflow:ellipsis;}
+.cr-root .cr-send,.cr-root .cr-stop {margin-left:auto;border-radius:50%;width:32px;height:32px;min-height:32px;flex-shrink:0;padding:0;font-size:0;background:var(--cr-accent);color:var(--cr-bg);}
+.cr-root .cr-send::before {content:'↑';font-size:22px;line-height:1;}
+.cr-root .cr-stop::before {content:'■';font-size:12px;}
+.cr-root .cr-send:hover,.cr-root .cr-stop:hover {background:var(--cr-muted);}
+.cr-root .cr-footnote {text-align:center;font-size:10px;color:var(--cr-muted);padding-top:7px;}
+.cr-root .cr-toolbar {display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center;}
+.cr-root .cr-small {font-size:11px;color:var(--cr-muted);white-space:pre-wrap;overflow-wrap:anywhere;}
+.cr-root .cr-error {color:#b53838;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:100px;overflow:auto;margin:0 0 6px;}
+.cr-root .cr-error:empty {display:none;}
+.cr-root .cr-nav {position:absolute;inset:0 auto 0 0;width:min(240px,88%);z-index:3;background:var(--cr-nav);border-right:1px solid var(--cr-border);box-shadow:10px 0 30px #0000000d;padding:12px 10px;display:flex;flex-direction:column;min-height:0;gap:8px;}
+.cr-root .cr-nav-heading {display:flex;align-items:center;justify-content:space-between;padding-left:8px;}
+.cr-root .cr-current {background:var(--cr-hover);font-size:12px;text-align:left;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;width:100%;}
+.cr-root .cr-history-load {text-align:left;font-size:11px;color:var(--cr-muted);}
+.cr-root .cr-history-list {flex:1;min-height:0;overflow:auto;scrollbar-width:thin;}
+.cr-root .cr-history-entry {display:block;width:100%;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;font-size:12px;}
+.cr-root .cr-nav > .cr-small {margin:0 7px;font-size:10px;}
+.cr-root .cr-panel {position:absolute;z-index:4;inset:52px 10px 12px;max-height:calc(100% - 64px);overflow:auto;padding:16px;border:1px solid var(--cr-border);border-radius:14px;background:var(--cr-bg);box-shadow:0 12px 35px #00000012;}
+.cr-root .cr-panel:not([open]) {display:none;}
+.cr-root .cr-panel summary {list-style:none;font-size:14px;font-weight:600;margin-bottom:14px;cursor:pointer;}
+.cr-root .cr-panel p {font-size:12px;line-height:1.7;}
+.cr-root .cr-panel input,.cr-root .cr-panel textarea {width:100%;border:1px solid var(--cr-border);background:var(--cr-bg);border-radius:7px;padding:8px;margin:8px 0;}
+.cr-root .cr-panel textarea {resize:vertical;min-height:120px;}
+.cr-root .cr-panel button {border:1px solid var(--cr-border);margin:3px;}
+.cr-root .cr-panel .cr-panel-close {display:block;margin:16px 0 0 auto;}
+@container (min-width:620px) {
+  .cr-root.cr-nav-open .cr-shell {grid-template-columns:200px minmax(0,1fr);}
+  .cr-root .cr-nav {position:relative;inset:auto;width:200px;box-shadow:none;}
+}
+@container (max-width:360px) {
+  .cr-root .cr-header {padding:8px;gap:3px;}
+  .cr-root .cr-heading {padding-inline:12px;}
+  .cr-root .cr-log {padding:12px;}
+  .cr-root .cr-bottom {padding:6px 8px;}
+  .cr-root .cr-context-toggle {flex-basis:100%;}
+  .cr-root .cr-welcome h2 {font-size:18px;}
+}
+@media (prefers-color-scheme:dark) {
+  .cr-root {--cr-bg:#202020;--cr-nav:#191919;--cr-text:#ecece8;--cr-muted:#a3a39c;--cr-border:#3b3b37;--cr-hover:#30302d;--cr-bubble:#30302d;--cr-accent:#ecece8;color-scheme:dark;}
+  .cr-root .cr-error {color:#ff9696;}
+}

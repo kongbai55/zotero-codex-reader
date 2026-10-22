@@ -29,7 +29,8 @@ startup = async function(data, reason) {
 };
 '''
 files['bootstrap.js']+=suffix.encode()
-files['test-smoke.js']=(root/'tests/zotero-smoke.js').read_bytes()
+test_script = 'zotero-reader-smoke.js' if len(sys.argv)>2 and sys.argv[2]=='reader' else 'zotero-smoke.js'
+files['test-smoke.js']=(root/'tests'/test_script).read_bytes()
 with zipfile.ZipFile(extension,'w',zipfile.ZIP_DEFLATED) as z:
  for name,content in files.items():z.writestr(name,content)
 prefs={

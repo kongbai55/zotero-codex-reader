@@ -23,6 +23,12 @@ async function runZoteroSmoke(rootURI) {
     record('correct paper title',view.title==='Codex Reader integration fixture');
     record('context empty until explicitly added',view.context.value==='');
     record('send and stop buttons exist',view.send.textContent==='发送' && view.stop.disabled);
+    view.toggle.click();record('history navigation opens',!view.nav.hidden);
+    view.root.querySelector('[aria-label="收起会话列表"]').click();record('history navigation closes',view.nav.hidden);
+    view.contextToggle.click();record('context preview opens',view.contextDetails.open);
+    view.root.querySelector('[aria-label="关闭上下文预览"]').click();record('context preview closes',!view.contextDetails.open);
+    view.root.querySelector('.cr-welcome button').click();
+    record('quick prompt only fills draft',view.question.value.length>0 && !codexScope.CodexReaderHost.sessions.has(view.key));
     const extraction=await Zotero.PDFWorker.getFullText(attachment.id,20);
     record('PDF extraction works',extraction.text.includes('Fixture paper'));
     const popup=win.document.createElement('div');
@@ -32,12 +38,14 @@ async function runZoteroSmoke(rootURI) {
     const session=new codexScope.CodexReaderCore.Session({request:async method=>method==='thread/start'?{thread:{id:'fixture-thread'}}:{turn:{id:'fixture-turn',status:'inProgress'}}},'D:\\fixture',()=>codexScope.CodexReaderHost.emit());
     codexScope.CodexReaderHost.sessions.set(view.key,session);
     await session.send({question:'Explain fixture',context:'Selected fixture paragraph'});
+    record('busy composer shows stop and disables new conversation',view.send.hidden && !view.stop.hidden && view.reset.disabled);
     session.event('item/agentMessage/delta',{threadId:'fixture-thread',turnId:'fixture-turn',itemId:'msg',delta:'<img src="https://example.invalid/tracker" onerror="bad()">'});
     session.event('turn/completed',{threadId:'fixture-thread',turn:{id:'fixture-turn',status:'completed'}});
     codexScope.CodexReaderUI.update(view);
     record('streamed output displayed as text',view.log.textContent.includes('<img'));
     record('model output cannot create remote images',view.log.querySelector('img')===null);
     record('finished turn unlocks send',!view.send.disabled);
+    record('completed conversation hides welcome and shows messages',view.welcome.hidden && !view.log.hidden && view.stop.hidden);
     // Exercise host Subprocess in the actual Gecko runtime, but never send a model turn.
     codexScope.CodexReaderHost.sessions.clear();
     const rpc=await codexScope.CodexReaderHost.connect();

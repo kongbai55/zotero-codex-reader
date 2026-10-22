@@ -17,12 +17,13 @@ async function startup({rootURI}) {
     ['locale','codexreader','zh-CN',rootURI+'locale/zh-CN/']
   ]);
   codexScope = {Zotero,Services,ChromeUtils,Components,IOUtils,PathUtils,URL,setTimeout,clearTimeout};
-  for (const file of ['core.js','host.js','sidebar.js']) Services.scriptloader.loadSubScript(rootURI+'content/'+file,codexScope,'UTF-8');
+  for (const file of ['core.js','host.js','sidebar.js','panel.js']) Services.scriptloader.loadSubScript(rootURI+'content/'+file,codexScope,'UTF-8');
   codexScope.CodexReaderHost.rootURI=rootURI;
   for (const win of Zotero.getMainWindows()) await onMainWindowLoad({window:win});
   codexScope.CodexReaderUI.install(rootURI,PLUGIN_ID);
 }
 function onMainWindowLoad({window}) {
+  if(codexScope?.CodexReaderUI.paneID)codexScope.CodexReaderPanel.watchWindow(window);
   if (window.MozXULElement?.insertFTLIfNeeded) {
     window.MozXULElement.insertFTLIfNeeded('codex-reader.ftl');
     return;
@@ -32,7 +33,7 @@ function onMainWindowLoad({window}) {
     link.rel='localization';link.href='codex-reader.ftl';window.document.documentElement.append(link);
   }
 }
-function onMainWindowUnload() {}
+function onMainWindowUnload({window}) {codexScope?.CodexReaderPanel.releaseWindow(window);}
 async function shutdown() {
   if (codexScope) {
     codexScope.CodexReaderUI.uninstall();await codexScope.CodexReaderHost.disconnect();

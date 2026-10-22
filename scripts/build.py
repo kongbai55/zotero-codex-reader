@@ -22,7 +22,7 @@ print(target)
 print('SHA256:', digest)
 source = out / f'zotero-codex-reader-{manifest["version"]}-source.zip'
 with zipfile.ZipFile(source, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-    candidates = [root / name for name in ('README.md', 'TESTING.md', 'LICENSE', 'package.json', '.gitignore')]
+    candidates = [root / name for name in ('README.md', 'README.zh-CN.md', 'TESTING.md', 'LICENSE', 'package.json', '.gitignore') if (root / name).exists()]
     for folder in ('addon', 'scripts', 'tests'):
         candidates.extend(p for p in (root / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
     for path in sorted(candidates):

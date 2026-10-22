@@ -1,0 +1,11 @@
+{
+  "name": "zotero-codex-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A minimal Zotero reader sidebar using the local official Codex app-server over stdio",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "build": "python scripts/build.py"
+  }
+}

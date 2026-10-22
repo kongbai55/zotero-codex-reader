@@ -1,0 +1,25 @@
+reference/
+.test-profile*/
+.test-data*/
+.test-codex/
+test-results/
+dist/
+node_modules/
+*.log
+TESTING.md
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+.codex/
+auth.json
+
+# Operating system metadata
+.DS_Store
+Thumbs.db

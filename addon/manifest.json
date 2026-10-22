@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "name": "Codex Reader · 论文助手",
+  "version": "0.1.0",
+  "description": "在 Zotero 阅读侧栏通过本机 Codex CLI 对话。无第三方中转、无插件遥测。",
+  "author": "Dinglong Lu",
+  "applications": {
+    "zotero": {
+      "id": "codex-reader@kongbai55.local",
+      "update_url": "https://127.0.0.1:9/codex-reader-no-updates.json",
+      "strict_min_version": "7.0",
+      "strict_max_version": "10.0.*"
+    }
+  },
+  "icons": { "48": "content/icon.svg", "96": "content/icon.svg" }
+}

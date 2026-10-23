@@ -76,7 +76,7 @@ var CodexReaderHost = {
       // Drain, discard, and never persist stderr: it can include sensitive diagnostic content.
       this.readLoop(process.stderr,()=>{},null).catch(()=>{});
       process.wait().then(()=>rpc.close(),()=>rpc.close());
-      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.4.0'},capabilities:{experimentalApi:true}});
+      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.4.1'},capabilities:{experimentalApi:true}});
       await rpc.notify('initialized');
       this.version = init.userAgent || 'Codex';
       const account = await rpc.request('account/read',{refreshToken:false});
@@ -112,8 +112,11 @@ var CodexReaderHost = {
   },
   getSession(key) {
     let session = this.sessions.get(key);
-    if (!session || session.rpc !== this.rpc) {
-      session = new CodexReaderCore.Session(this.rpc,CodexReaderProjects.current(key)?.path || this.cwd,()=>this.emit());
+    const project=CodexReaderProjects.current(key),cwd=project?.path || this.cwd;
+    if(project?.missing)throw new Error('该项目已在 Codex 中移除，请重新选择项目。');
+    if(session?.busy && session.cwd!==cwd)throw new Error('项目目录已更改，请先停止当前回答。');
+    if (!session || session.rpc !== this.rpc || session.cwd!==cwd) {
+      session = new CodexReaderCore.Session(this.rpc,cwd,()=>this.emit());
       this.sessions.set(key,session);
     }
     return session;
@@ -132,6 +135,7 @@ var CodexReaderHost = {
     return result.data || [];
   },
   async forkHistory(key,threadId) {
+    if(CodexReaderProjects.current(key)?.missing)throw new Error('该项目已在 Codex 中移除，请重新选择项目。');
     if(this.deleting.has(threadId))throw new Error('该会话正在删除。');
     if (this.sessions.get(key)?.busy) throw new Error('请先停止当前回答。');
     const rpc = await this.connect();

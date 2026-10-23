@@ -72,6 +72,20 @@ async function runZoteroSmoke(rootURI) {
     await codexScope.CodexReaderProjects.saveMemory(projectFolder,'Existing guidance\nShared research memory\n','Existing guidance\n');
     record('shared project guidance persists in AGENTS.md',(await codexScope.CodexReaderProjects.readMemory(projectFolder)).includes('Shared research memory'));
     record('new conversation uses the shared project cwd',codexScope.CodexReaderHost.getSession(view.key).cwd===projectFolder);
+    const syncHome=PathUtils.join(PathUtils.parent(Zotero.Profile.dir),'test-results','project-sync-home');await IOUtils.makeDirectory(syncHome,{ignoreExisting:true});
+    const syncFile=PathUtils.join(syncHome,'.codex-global-state.json');
+    Services.prefs.setStringPref('extensions.codexreader.home',syncHome);
+    await IOUtils.writeJSON(syncFile,{'local-projects':{'sync-project':{id:'sync-project',name:'Synced Codex project',rootPaths:[projectFolder]}}});
+    await codexScope.CodexReaderProjects.sync();
+    record('desktop project registry automatically populates project picker',view.projectSelect.querySelector('option[value="sync-project"]')?.textContent==='Synced Codex project');
+    record('existing paper folder binding migrates to stable Codex identity',view.projectSelect.value==='sync-project');
+    await IOUtils.writeJSON(syncFile,{'local-projects':{'sync-project':{id:'sync-project',name:'Renamed Codex project',rootPaths:[projectFolder]}}});
+    await Zotero.Promise.delay(5500);
+    record('automatic polling detects Codex project rename without clicking import',view.projectSelect.selectedOptions[0]?.textContent==='Renamed Codex project');
+    await IOUtils.writeJSON(syncFile,{'local-projects':{}});await codexScope.CodexReaderProjects.sync();
+    record('removed bound project is visibly unavailable',view.projectSelect.selectedOptions[0]?.disabled && view.projectSelect.selectedOptions[0]?.textContent.includes('移除'));
+    let removedBlocked=false;try{codexScope.CodexReaderHost.getSession(view.key);}catch(_){removedBlocked=true;}
+    record('removed project cannot silently reuse its old conversation',removedBlocked);
     const history=await codexScope.CodexReaderHost.listHistory();
     record('existing Codex history readable',Array.isArray(history));
     await codexScope.CodexReaderHost.disconnect();

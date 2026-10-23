@@ -1,6 +1,6 @@
 {
   "name": "zotero-codex-reader",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "A minimal Zotero reader sidebar using the local official Codex app-server over stdio",
   "license": "MIT",

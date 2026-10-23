@@ -14,7 +14,7 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.4.0.xpi`.
+4. Select `dist/zotero-codex-reader-0.4.1.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
 6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
 
@@ -39,6 +39,10 @@ Automatic background updates are disabled for this plugin at startup. Manual upd
 
 ## Features
 
+### 0.4.1: Automatic Codex project sync
+
+Saved Codex local projects populate the picker automatically and refresh every five seconds, including renames, changed folders and removals.
+
 ### 0.4.0: Annotations, formatted replies, reasoning and projects
 
 - Select a model and its advertised reasoning effort; unsupported levels disappear on model switches.
@@ -46,10 +50,10 @@ Automatic background updates are disabled for this plugin at startup. Manual upd
 - **Enter** sends; **Shift+Enter** adds a newline. Input-method composition does not send.
 - Select PDF or assistant text and choose **Add to conversation**. Excerpts accumulate as numbered annotations with optional comments, editable chips and individual removal. Accepted messages retain their annotations; pending annotations clear on submission.
 - Delete one history conversation or the current conversation after confirmation. Codex `thread/delete` permanently deletes that thread and its descendants. Unsupported servers report an error and retain the local display.
-- Open **Projects and memory** in the drawer to create/add a local folder or import working directories from 40 recent Codex conversations. Bind each paper to a project; new and branched chats use that folder.
+- Open **Projects and memory** in the drawer to create/add a local folder and automatically follow saved Codex local projects. Bind each paper to a project; new and branched chats use that folder.
 - Explicitly saved project memory lives in **AGENTS.md**. The editor loads the entire existing file and detects external edits before saving. Saving starts new plugin conversations for that project; saved Codex history remains available.
 
-**Project visibility:** this release does not automatically synchronize the desktop project's sidebar registry. Add the same folder in Codex to display it there, then select/add it here. History import discovers working directories, not custom desktop project names or cloud-only projects. Shared AGENTS.md is file-based guidance, not ChatGPT account memory or automatic learning from every chat. Start a new Codex chat to load updated guidance. See [local projects](https://learn.chatgpt.com/docs/projects?surface=app) and [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+**Project visibility (0.4.1):** saved Codex local projects synchronize automatically on startup and every five seconds. Names, primary/secondary folder paths and removals follow Codex without manual import or a model connection. Stable project identities preserve paper bindings across renames and directory changes. Removed bound projects are marked unavailable; sending requires another selection. Registry errors preserve the last good list and show a sync status. A custom CODEX_HOME can be set in connection settings. This compatibility reader only reads `.codex-global-state.json`; it does not rewrite desktop settings, read credentials or register plugin-created folders back into the desktop. Pure cloud/remote projects are outside this local sync. Shared AGENTS.md remains file-based guidance; start a new Codex chat to load updated guidance.
 
 ### 0.3.0: Full Reading Panel
 

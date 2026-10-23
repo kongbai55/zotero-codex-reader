@@ -47,6 +47,8 @@ var CodexReaderUI = {
     Zotero.Reader.registerEventListener('renderTextSelectionPopup',this.selectionHandler,pluginID);
     this.updateListener = ()=>{for (const view of this.views.values()) this.update(view);};
     CodexReaderHost.listeners.add(this.updateListener);
+    this.projectListener=()=>{for(const view of this.views.values())this.update(view);};
+    CodexReaderProjects.start(this.projectListener);
   },
   findReader(doc,item) {
     const win = doc.defaultView;
@@ -86,6 +88,8 @@ var CodexReaderUI = {
     const path = h('input',{type:'text',placeholder:'自动寻找 Codex；也可填 codex.exe / codex.cmd 的完整路径',value:Services.prefs.getStringPref('extensions.codexreader.binary',''),'aria-label':'Codex 可执行文件路径'});
     details.append(path);
     const savePath = h('button',{type:'button'},'保存路径并重连');details.append(savePath);
+    const homePath=h('input',{type:'text',value:Services.prefs.getStringPref('extensions.codexreader.home',''),placeholder:'留空自动寻找 CODEX_HOME / 用户目录下的 .codex','aria-label':'Codex 项目同步配置目录'});
+    const saveHome=h('button',{type:'button'},'保存项目同步目录');details.append(h('p',{className:'cr-small'},'Codex 项目同步配置目录（仅用于读取桌面项目列表）'),homePath,saveHome);
     const model = h('select',{'aria-label':'模型'});
     const effort = h('select',{'aria-label':'推理强度',title:'推理强度'});
     const historyLoad = h('button',{type:'button'},'加载 Codex 历史');
@@ -93,11 +97,11 @@ var CodexReaderUI = {
     const quota = h('button',{type:'button'},'查看账户用量');const quotaInfo = h('div',{className:'cr-small'}); details.append(quota,quotaInfo);
     const projectDetails=h('details',{className:'cr-projects cr-panel'});projectDetails.append(h('summary',{},'项目与共享记忆'));
     const projectPath=h('div',{className:'cr-small'});
-    const projectCreate=h('button',{type:'button'},'创建项目'),projectChoose=h('button',{type:'button'},'添加已有文件夹'),projectImport=h('button',{type:'button'},'从 Codex 历史导入项目');
+    const projectCreate=h('button',{type:'button'},'创建项目'),projectChoose=h('button',{type:'button'},'添加已有文件夹'),projectImport=h('button',{type:'button'},'立即同步 Codex 项目');
     const memory=h('textarea',{rows:9,'aria-label':'项目共享记忆',placeholder:'项目目标、术语、偏好和已确认结论…'});
     const memoryReload=h('button',{type:'button'},'重新载入记忆'),memorySave=h('button',{type:'button'},'保存共享记忆'),pathCopy=h('button',{type:'button'},'复制项目路径');
     const projectClose=h('button',{type:'button',className:'cr-panel-close'},'完成');
-    projectDetails.append(projectPath,h('p',{className:'cr-small'},'与 Codex 使用同一个本地文件夹，共用 AGENTS.md 项目记忆。新项目需在 Codex 中添加同一文件夹才会显示；项目列表不会自动同步。更改项目会开始独立会话。'),projectCreate,projectChoose,projectImport,memory,memoryReload,memorySave,pathCopy,projectClose);
+    projectDetails.append(projectPath,h('p',{className:'cr-small'},'自动读取 Codex 桌面项目，每 5 秒同步名称、目录和移除状态。选择同一项目后共用 AGENTS.md 记忆；更改项目会开始独立会话。在这里创建的本地文件夹仍需添加到 Codex。'),projectCreate,projectChoose,projectImport,memory,memoryReload,memorySave,pathCopy,projectClose);
     const log = h('div',{className:'cr-log',role:'log','aria-label':'聊天记录'});
     const contextDetails = h('details',{className:'cr-context cr-panel'});contextDetails.append(h('summary',{},'注释与论文上下文'));
     const annotationList=h('div',{className:'cr-annotation-list'});
@@ -144,6 +148,7 @@ var CodexReaderUI = {
     bottom.append(error,composer,h('div',{className:'cr-footnote'},'Enter 发送 · Shift+Enter 换行'));
     const navHeading=h('div',{className:'cr-nav-heading'});
     const projectSelect=h('select',{'aria-label':'当前论文所属项目'}),projectManage=h('button',{type:'button',className:'cr-project-manage'},'项目与记忆…');
+    const projectSyncInfo=h('div',{className:'cr-small cr-project-sync',role:'status','aria-live':'polite'});
     const navClose=h('button',{type:'button',className:'cr-icon','aria-label':'收起会话列表'},'×');
     navHeading.append(h('strong',{},'会话'),navClose);
     const current=h('button',{type:'button',className:'cr-current',title},'当前论文 · '+title);
@@ -151,7 +156,7 @@ var CodexReaderUI = {
     const historyList=h('div',{className:'cr-history-list'});
     historyList.append(h('p',{className:'cr-small'},'点击加载，查看最近的 Codex 对话。'));
     historyLoad.className='cr-history-load';
-    nav.append(navHeading,projectSelect,projectManage,current,deleteCurrent,historyLoad,historyList,h('p',{className:'cr-small'},'点击历史会话创建分支；后续消息不会同步回原对话。'));
+    nav.append(navHeading,projectSelect,projectSyncInfo,projectManage,current,deleteCurrent,historyLoad,historyList,h('p',{className:'cr-small'},'点击历史会话创建分支；后续消息不会同步回原对话。'));
     const settingsClose=h('button',{type:'button',className:'cr-panel-close','aria-label':'关闭连接设置'},'关闭');
     details.append(bar,copy,note,settingsClose);
     const contextClose=h('button',{type:'button',className:'cr-panel-close','aria-label':'关闭上下文预览'},'完成');
@@ -159,7 +164,7 @@ var CodexReaderUI = {
     for(const panel of [details,contextDetails,projectDetails])panel.append(h('div',{className:'cr-panel-error cr-error',role:'alert'}));
     main.append(header,heading,conversation,bottom,details,contextDetails,projectDetails);
     shell.append(nav,main);root.append(style,mathStyle,shell);body.replaceChildren(root);
-    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy};
+    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy,projectSyncInfo};
     exitPanel.addEventListener('click',()=>{if(view.overlay)CodexReaderPanel.close(view.overlay);});
     const setNav=open=>{nav.hidden=!open;root.classList.toggle('cr-nav-open',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'收起会话列表':'展开会话列表');};
     toggle.addEventListener('click',()=>setNav(nav.hidden));
@@ -184,7 +189,7 @@ var CodexReaderUI = {
       const project=CodexReaderProjects.current(key),original=project?await CodexReaderProjects.readMemory(project.path):'';
       if(CodexReaderProjects.current(key)?.path!==project?.path)return;
       view.memoryPath=project?.path;view.memoryOriginal=original;
-      memory.value=view.memoryOriginal;memory.disabled=!project;memorySave.disabled=!project;memoryReload.disabled=!project;pathCopy.disabled=!project;
+      memory.value=view.memoryOriginal;memory.disabled=!project || !!project.missing;memorySave.disabled=memory.disabled;memoryReload.disabled=memory.disabled;pathCopy.disabled=!project;
     };
     const bindProject=async path=>{
       if(view.submitting || CodexReaderHost.sessions.get(key)?.busy)throw new Error('请先停止回答，再切换项目。');
@@ -196,15 +201,15 @@ var CodexReaderUI = {
     projectCreate.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView,true);if(p)await bindProject(p.path);}));
     projectChoose.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView);if(p)await bindProject(p.path);}));
     projectImport.addEventListener('click',action(async()=>{
-      const threads=await CodexReaderHost.listHistory(),data=CodexReaderProjects.load();let count=0;
-      for(const thread of threads)if(thread.cwd && thread.cwd!==CodexReaderHost.cwd && PathUtils.isAbsolute(thread.cwd) && !data.projects.some(p=>p.path===thread.cwd) && await IOUtils.exists(thread.cwd)){
-        data.projects.push({name:PathUtils.filename(thread.cwd),path:thread.cwd});count++;
-      }
-      CodexReaderProjects.save(data);this.updateProjects(view);projectPath.textContent=`已导入 ${count} 个本地项目文件夹。请选择项目后编辑共享记忆。`;
+      await CodexReaderProjects.sync();this.updateProjects(view);
+    }));
+    saveHome.addEventListener('click',action(async()=>{
+      const path=homePath.value.trim();if(path && !PathUtils.isAbsolute(path))throw new Error('请输入完整目录路径。');
+      Services.prefs.setStringPref('extensions.codexreader.home',path);await CodexReaderProjects.sync();
     }));
     memoryReload.addEventListener('click',action(reloadMemory));
     memorySave.addEventListener('click',action(async()=>{
-      const project=CodexReaderProjects.current(key);if(!project || project.path!==view.memoryPath)throw new Error('请先选择项目并重新载入记忆。');
+      const project=CodexReaderProjects.current(key);if(!project || project.missing || project.path!==view.memoryPath)throw new Error('请先选择可用项目并重新载入记忆。');
       const affected=[...CodexReaderHost.sessions].filter(([,s])=>s.cwd===project.path);
       if(affected.some(([,s])=>s.busy) || [...this.views.values()].some(v=>v.submitting && CodexReaderProjects.current(v.key)?.path===project.path))throw new Error('请先停止此项目中正在生成的回答。');
       await CodexReaderProjects.saveMemory(project.path,memory.value,view.memoryOriginal);view.memoryOriginal=memory.value;
@@ -320,10 +325,11 @@ var CodexReaderUI = {
   updateProjects(view) {
     const data=CodexReaderProjects.load(),path=data.bindings[view.key] || '',signature=JSON.stringify(data.projects);
     if(view.lastProjects!==signature){view.lastProjects=signature;view.projectSelect.replaceChildren(this.h(view.body.ownerDocument,'option',{value:''},'独立论文 · 选择项目'));
-      for(const p of data.projects)view.projectSelect.append(this.h(view.body.ownerDocument,'option',{value:p.path,title:p.path},p.name));
+      for(const p of data.projects)view.projectSelect.append(this.h(view.body.ownerDocument,'option',{value:CodexReaderProjects.identity(p),title:(p.roots || [p.path]).join('\n'),disabled:!!p.missing},p.name+(p.missing?'（已在 Codex 移除）':'')));
     }
-    view.projectSelect.value=path;const project=data.projects.find(p=>p.path===path);
-    if(view.lastProjectPath!==path){view.lastProjectPath=path;view.projectPath.textContent=project?`${project.name}\n${project.path}`:'尚未选择项目。';}
+    view.projectSelect.value=path;const project=CodexReaderProjects.current(view.key),projectSignature=JSON.stringify(project);
+    view.projectSyncInfo.textContent=CodexReaderProjects.status;
+    if(view.lastProjectPath!==projectSignature){view.lastProjectPath=projectSignature;view.projectPath.textContent=project?`${project.name}${project.missing?'（已移除，请重新选择）':''}\n${project.path}`:'尚未选择项目。';}
   },
   renderAnnotations(view) {
     const doc=view.body.ownerDocument,h=(tag,props,text)=>this.h(doc,tag,props,text);
@@ -486,6 +492,7 @@ var CodexReaderUI = {
     if (this.selectionHandler) Zotero.Reader.unregisterEventListener('renderTextSelectionPopup',this.selectionHandler);
     if (this.paneID) Zotero.ItemPaneManager.unregisterSection(this.paneID);
     CodexReaderHost.listeners.delete(this.updateListener);
+    CodexReaderProjects.stop(this.projectListener);
     for (const body of [...this.views.keys()]) this.destroyView(body);
     this.drafts.clear();
   }

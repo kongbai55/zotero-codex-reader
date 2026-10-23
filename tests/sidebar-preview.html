@@ -12,7 +12,7 @@ body{margin:0;background:#e9e9e6;color:#282828;font:13px system-ui;display:flex;
 <div class="preview"><div class="tools"><span>本地预览 · 示例数据，不连接 Codex</span><button id="narrow">窄栏</button><button id="wide">宽栏</button><button id="sample">示例对话</button><button id="empty">空白对话</button></div><div id="mount"></div></div>
 <script src="content/vendor/marked.js"></script><script src="content/vendor/katex.min.js"></script><script src="markdown.js"></script><script src="core.js"></script><script>
 var prefs=new Map();
-var Services={prefs:{getStringPref:(key,fallback)=>prefs.get(key) || fallback,setStringPref(key,value){prefs.set(key,value);}},prompt:{confirm:()=>window.allowDelete!==false}};
+var Services={prefs:{getStringPref:(key,fallback)=>prefs.get(key) || fallback,setStringPref(key,value){prefs.set(key,value);}},prompt:{confirm:()=>window.allowDelete!==false},uuid:{generateUUID:()=>crypto.randomUUID()}};
 var copied='';
 var paper={id:1,libraryID:1,getField:()=> 'Beyond Single-shot Writing: Multi-turn Report Revision',isAttachment:()=>false};
 var attachment={id:2,parentID:1,attachmentContentType:'application/pdf',isAttachment:()=>true};
@@ -21,9 +21,15 @@ var CodexReaderHost={sessions:new Map(),models:[{id:'demo-model',model:'demo-mod
 emit(){CodexReaderUI.update(view);},connect:async()=>CodexReaderHost.rpc,
 clearSession(){this.sessions.clear();this.emit();},
 listHistory:async()=>[{id:'one',name:'论文方法与实验设计'},{id:'two',name:'机器人导航 · 研究笔记'},{id:'three',name:'整理文献中的关键结论'}],
-forkHistory:async()=>{sample();},getSession(){return {send:async(input)=>{this.sessions.set('2',{messages:[{role:'user',text:input.question,context:input.context},{role:'assistant',text:'这是界面演示，不会请求真实模型。',status:'completed'}]});this.emit();}};}};
+forkHistory:async()=>{sample();},getSession(){return {send:async(input)=>{window.sentInput=input;if(window.failSend)throw new Error('Fixture send failed');this.sessions.set('2',{messages:[{role:'user',text:input.question,context:input.context,attachments:input.attachments},{role:'assistant',text:'这是界面演示，不会请求真实模型。',status:'completed'}]});this.emit();}};}};
 CodexReaderHost.deleteHistory=async function(id){window.deletedThread=id;};
 CodexReaderHost.resumeHistory=async(_key,id)=>{window.resumedThread=id;sample();};CodexReaderHost.projectContext=async()=>'';
+</script><script src="attachments.js"></script><script>
+// Fixture storage only. Production import/validation/decoding run unchanged.
+var previewFiles=new Map();Zotero.Profile={dir:'D:/fixture-profile'};
+var PathUtils={join:(...parts)=>parts.join('/'),parent:path=>path.slice(0,path.lastIndexOf('/')),filename:path=>path.slice(path.lastIndexOf('/')+1),isAbsolute:path=>/^(?:[A-Z]:[\\/]|\/)/i.test(path)};
+var IOUtils={makeDirectory:async()=>{},write:async(path,bytes)=>previewFiles.set(path,bytes),remove:async path=>{for(const name of previewFiles.keys())if(name.startsWith(path))previewFiles.delete(name);}};
+CodexReaderAttachments.preview=file=>{const bytes=previewFiles.get(file.path);return file.kind==='image' && bytes?URL.createObjectURL(new Blob([bytes],{type:file.mime})):'';};
 </script><script src="projects.js"></script><script src="sidebar.js"></script><script>
 CodexReaderUI.rootURI='./';
 // Use production renderer and styles with a local fixture host.

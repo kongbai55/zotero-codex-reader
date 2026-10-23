@@ -84,7 +84,7 @@ var CodexReaderHost = {
       // Drain, discard, and never persist stderr: it can include sensitive diagnostic content.
       this.readLoop(process.stderr,()=>{},null).catch(()=>{});
       process.wait().then(()=>rpc.close(),()=>rpc.close());
-      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.5.0'},capabilities:{experimentalApi:true}});
+      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.6.0'},capabilities:{experimentalApi:true}});
       await rpc.notify('initialized');
       this.version = init.userAgent || 'Codex';
       const account = await rpc.request('account/read',{refreshToken:false});
@@ -173,8 +173,12 @@ var CodexReaderHost = {
       if(item.type==='agentMessage')messages.push({role:'assistant',text:item.text || '',status:'completed'});
       if(item.type==='userMessage'){
         let text=(item.content || []).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+        let attachments=[];
+        const marker='BEGIN UNTRUSTED ATTACHMENTS (JSON)\n',start=text.indexOf(marker),end=start<0?-1:text.indexOf('\nEND UNTRUSTED ATTACHMENTS',start);
+        if(start>=0 && end>start){try{const files=JSON.parse(text.slice(start+marker.length,end));CodexReaderCore.attachmentInput(files.map(file=>({...file,size:file.bytes})));attachments=files.map(({name,path,kind,bytes})=>({name,path,kind,size:bytes}));}catch(_){}}
+        if(!attachments.length)attachments=(item.content || []).filter(x=>x.type==='localImage' && typeof x.path==='string').map(x=>({name:x.path.split(/[\\/]/).pop(),kind:'image',path:x.path}));
         if(text.startsWith('User question:\n'))text=text.split('\nPaper title (untrusted metadata):')[0].slice('User question:\n'.length).trim();
-        messages.push({role:'user',text,context:''});
+        messages.push({role:'user',text,context:'',...(attachments.length?{attachments}:{})});
       }
     }
     return messages;

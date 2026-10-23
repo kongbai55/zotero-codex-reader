@@ -51,6 +51,34 @@ async function runZoteroSmoke(rootURI) {
     record('model output cannot create remote images',view.log.querySelector('img')===null);
     record('finished turn unlocks send',!view.send.disabled);
     record('completed conversation hides welcome and shows messages',view.welcome.hidden && !view.log.hidden && view.stop.hidden);
+    const attachmentAPI=codexScope.CodexReaderAttachments;
+    const fixturePath=PathUtils.join('D:\\open source\\zotero-codex','test-results','fixture.pdf');
+    await view.addAttachments([{path:fixturePath,name:'fixture.pdf'}]);
+    const pdfCopy=view.attachments[0];
+    record('native file attachment is copied without altering the original',pdfCopy.kind==='file' && pdfCopy.path!==fixturePath && await IOUtils.exists(pdfCopy.path) && await IOUtils.exists(fixturePath));
+    const png=Uint8Array.from(win.atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOwbvgGAAKrAbLOurG5AAAAAElFTkSuQmCC'),c=>c.charCodeAt(0));
+    const pasteData=new win.DataTransfer();pasteData.items.add(new win.File([png],'screenshot.png',{type:'image/png'}));
+    // Gecko strips File payloads from constructed ClipboardEvents. Supply the native
+    // File/DataTransfer fixture explicitly; actual OS clipboard events are trusted.
+    const pasteEvent=new win.ClipboardEvent('paste',{bubbles:true,cancelable:true});Object.defineProperty(pasteEvent,'clipboardData',{value:pasteData});
+    record('Gecko File transfer is readable by the attachment adapter',attachmentAPI.fromTransfer(pasteData).length===1);
+    view.question.dispatchEvent(pasteEvent);
+    await view.attachmentQueue;await Zotero.Promise.delay(250);
+    record('Gecko clipboard image reaches pending attachments',view.attachments.length===2 && view.attachments[1].kind==='image');
+    const preview=view.attachmentList.querySelector('img');
+    record('native local image preview loads',preview?.complete && preview.naturalWidth===1);
+    const imageCopy=view.attachments[1];
+    const fileTransfer=new win.DataTransfer();fileTransfer.items.add(new win.File(['Attachment text fixture'],'notes.md',{type:'text/markdown'}));
+    const dropEvent=new win.DragEvent('drop',{bubbles:true,cancelable:true});Object.defineProperty(dropEvent,'dataTransfer',{value:fileTransfer});
+    view.composer.dispatchEvent(dropEvent);await view.attachmentQueue;
+    record('Gecko file drop decodes local text',view.attachments.length===3 && view.attachments[2].text==='Attachment text fixture');
+    const wireCalls=[],attachmentSession=new codexScope.CodexReaderCore.Session({request:async(method,params)=>{wireCalls.push({method,params});return method==='thread/start'?{thread:{id:'attachments-fixture'}}:{turn:{status:'completed'}};}},'D:\\fixture');
+    await attachmentSession.send({question:'Read attachments',attachments:view.attachments});
+    const wire=wireCalls.find(call=>call.method==='turn/start').params.input;
+    record('native send includes image input and readable file copy references',wire.some(input=>input.type==='localImage' && input.path===imageCopy.path) && wire[0].text.includes(pdfCopy.path.replace(/\\/g,'\\\\')) && wire[0].text.includes('Attachment text fixture'));
+    view.attachmentList.querySelector('[aria-label="移除附件：screenshot.png"]').click();await Zotero.Promise.delay(100);
+    record('removing unsent attachment deletes only its managed copy',view.attachments.length===2 && !await IOUtils.exists(imageCopy.path) && await IOUtils.exists(fixturePath));
+    for(const file of view.attachments)await attachmentAPI.discard(file);view.attachments=[];codexScope.CodexReaderUI.renderAttachments(view);codexScope.CodexReaderUI.saveDraft(view);
     // Exercise host Subprocess in the actual Gecko runtime, but never send a model turn.
     codexScope.CodexReaderHost.sessions.clear();
     const rpc=await codexScope.CodexReaderHost.connect();

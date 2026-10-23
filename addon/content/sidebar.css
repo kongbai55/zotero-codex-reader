@@ -85,6 +85,18 @@
 .cr-root .cr-bottom {padding:8px 14px 10px;min-width:0;background:var(--cr-bg);}
 .cr-root .cr-composer {border:1px solid var(--cr-border);border-radius:19px;background:var(--cr-bg);padding:10px;box-shadow:0 2px 9px #00000006;}
 .cr-root .cr-composer:focus-within {border-color:#b4b4ad;}
+.cr-root .cr-composer.cr-dragover {border:2px dashed #3b80f6;background:var(--cr-hover);}
+.cr-root .cr-attach {font-size:22px;line-height:1;padding:2px 5px;flex-shrink:0;}
+.cr-root .cr-attachment-status:empty {display:none;}
+.cr-root .cr-attachments {display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;margin:0 0 7px;}
+.cr-root .cr-file-card {display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;border:1px solid var(--cr-border);border-radius:10px;padding:6px;background:var(--cr-bg);}
+.cr-root .cr-file-thumb {width:42px;height:42px;object-fit:contain;border-radius:5px;flex-shrink:0;}
+.cr-root .cr-file-icon {font-size:25px;color:var(--cr-muted);padding:0 5px;}
+.cr-root .cr-file-label {display:flex;flex-direction:column;min-width:0;max-width:190px;gap:3px;}
+.cr-root .cr-file-name {font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cr-root .cr-file-meta {font-size:10px;color:var(--cr-muted);overflow-wrap:anywhere;}
+.cr-root .cr-file-remove {align-self:flex-start;flex-shrink:0;padding:0 4px;min-height:22px;font-size:16px;}
+.cr-root .cr-sent-files {margin-top:8px;}
 .cr-root .cr-composer textarea {display:block;width:100%;resize:none;border:0;box-shadow:none;background:transparent;outline:none;padding:4px 6px 8px;min-height:54px;max-height:150px;overflow-y:auto;}
 .cr-root .cr-composer textarea::placeholder {color:var(--cr-muted);}
 .cr-root .cr-composer-bar {display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
@@ -124,7 +136,7 @@
   .cr-root .cr-heading {padding-inline:12px;}
   .cr-root .cr-log {padding:12px;}
   .cr-root .cr-bottom {padding:6px 8px;}
-  .cr-root .cr-context-toggle {flex-basis:100%;}
+  .cr-root .cr-context-toggle {flex-basis:calc(100% - 40px);}
   .cr-root .cr-welcome h2 {font-size:18px;}
 }
 @media (prefers-color-scheme:dark) {

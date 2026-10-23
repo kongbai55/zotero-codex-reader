@@ -141,10 +141,13 @@ var CodexReaderUI = {
     const composer=h('div',{className:'cr-composer'});
     const contextToggle=h('button',{type:'button',className:'cr-context-toggle','aria-expanded':'false',title:'查看注释或添加论文文本'},'＋ 添加上下文');
     const annotationPreview=h('div',{className:'cr-annotation-preview',hidden:true});
+    const attachmentList=h('div',{className:'cr-attachments',hidden:true,'aria-label':'待发附件'});
+    const attach=h('button',{type:'button',className:'cr-attach','aria-label':'添加文件或图片',title:'添加文件或图片，也可拖放或粘贴'},'＋');
+    const attachmentStatus=h('div',{className:'cr-small cr-attachment-status',role:'status','aria-live':'polite'});
     const composerBar=h('div',{className:'cr-composer-bar'});
     send.className='cr-send';send.title='发送（Enter）';send.setAttribute('aria-label','发送');
     stop.className='cr-stop';stop.title='停止生成';
-    composerBar.append(contextToggle,model,effort,send,stop);composer.append(annotationPreview,question,composerBar);
+    composerBar.append(attach,contextToggle,model,effort,send,stop);composer.append(annotationPreview,attachmentList,attachmentStatus,question,composerBar);
     const bottom=h('div',{className:'cr-bottom'});
     bottom.append(error,composer,h('div',{className:'cr-footnote'},'Enter 发送 · Shift+Enter 换行'));
     const navHeading=h('div',{className:'cr-nav-heading'});
@@ -165,7 +168,7 @@ var CodexReaderUI = {
     for(const panel of [details,contextDetails,projectDetails])panel.append(h('div',{className:'cr-panel-error cr-error',role:'alert'}));
     main.append(header,heading,conversation,bottom,details,contextDetails,projectDetails);
     shell.append(nav,main);root.append(style,mathStyle,shell);body.replaceChildren(root);
-    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy,projectClose,projectSyncInfo,projectPush};
+    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],attachments:[],attachmentList,attachmentStatus,attach,composer,deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy,projectClose,projectSyncInfo,projectPush};
     exitPanel.addEventListener('click',()=>{if(view.overlay)CodexReaderPanel.close(view.overlay);});
     const setNav=open=>{nav.hidden=!open;root.classList.toggle('cr-nav-open',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'收起会话列表':'展开会话列表');if(open){CodexReaderProjects.sync().catch(()=>{});if(CodexReaderProjects.current(key))view.loadHistory?.().catch(e=>{error.textContent=e.message;});}};
     toggle.addEventListener('click',()=>setNav(nav.hidden));
@@ -181,12 +184,13 @@ var CodexReaderUI = {
     root.addEventListener('keydown',event=>{if(event.key==='Escape'){if(projectDetails.open){projectDetails.open=false;projectManage.focus();}else if(contextDetails.open){contextDetails.open=false;contextToggle.focus();}else if(details.open){details.open=false;settingsToggle.focus();}else {setNav(false);toggle.focus();}event.stopPropagation();}});
     this.views.set(body,view);
     if(this.projectListener)CodexReaderProjects.start(this.projectListener);
-    const draft = this.drafts.get(key); if (draft) {question.value=draft.question;context.value=draft.context;view.annotations=(draft.annotations || []).map(note=>({...note}));view.preferredModel=draft.model;view.preferredEffort=draft.effort;}
-    this.renderAnnotations(view);this.saveDraft(view);
+    const draft = this.drafts.get(key); if (draft) {question.value=draft.question;context.value=draft.context;view.annotations=(draft.annotations || []).map(note=>({...note}));view.attachments=(draft.attachments || []).map(file=>({...file}));view.preferredModel=draft.model;view.preferredEffort=draft.effort;}
+    this.renderAnnotations(view);this.renderAttachments(view);this.saveDraft(view);
     model.addEventListener('change',()=>{view.lastEffortJSON='';this.updateEffort(view,true);this.saveDraft(view);});
     effort.addEventListener('change',()=>this.saveDraft(view));
     question.addEventListener('input',()=>this.saveDraft(view));context.addEventListener('input',()=>this.saveDraft(view));
     const action = fn=>async()=>{error.textContent='';for(const panel of [details,contextDetails,projectDetails])panel.querySelector('.cr-panel-error').textContent='';try{await fn();}catch(e){error.textContent=e.message;for(const panel of [details,contextDetails,projectDetails])panel.querySelector('.cr-panel-error').textContent=e.message;}this.update(view);};
+    this.installAttachments(view,action);
     const reloadMemory=async()=>{
       const project=CodexReaderProjects.current(key),original=project?await CodexReaderProjects.readMemory(project.path):'';
       if(CodexReaderProjects.current(key)?.path!==project?.path)return;
@@ -237,7 +241,8 @@ var CodexReaderUI = {
       const session=CodexReaderHost.sessions.get(key);
       if(session?.threadId)await CodexReaderHost.deleteHistory(session.threadId);
       else await CodexReaderHost.clearSession(key);
-      question.value='';context.value='';view.annotations=[];this.renderAnnotations(view);this.saveDraft(view);
+      for(const file of view.attachments)if(!file.retained)await CodexReaderAttachments.discard(file).catch(()=>{});
+      question.value='';context.value='';view.annotations=[];view.attachments=[];this.renderAnnotations(view);this.renderAttachments(view);this.saveDraft(view);
     }));
     stop.addEventListener('click',action(async()=>{
       const session=CodexReaderHost.sessions.get(key);
@@ -298,19 +303,21 @@ var CodexReaderUI = {
     }));
     clearContext.addEventListener('click',()=>{context.value='';view.annotations=[];this.renderAnnotations(view);contextInfo.textContent='待发上下文已清空；会话仍记得之前发送的内容。';this.saveDraft(view);});
     const submit = action(async()=>{
-      if(view.submitting || CodexReaderHost.sessions.get(key)?.busy)return;
+      if(view.submitting || view.importing || CodexReaderHost.sessions.get(key)?.busy)return;
       const rawQuestion=question.value;
-      const input={question:rawQuestion.trim() || (view.annotations.length?'请根据以下注释逐条回应。':''),title,context:context.value,annotations:view.annotations.map(note=>({...note}))};CodexReaderCore.promptFor(input);
+      const input={question:rawQuestion.trim() || (view.annotations.length?'请根据以下注释逐条回应。':view.attachments.length?'请阅读这些附件并概括主要内容。':''),title,context:context.value,annotations:view.annotations.map(note=>({...note})),attachments:view.attachments.map(file=>({...file}))};CodexReaderCore.promptFor(input);
       view.submitting=true;this.update(view);
       try {
         await CodexReaderHost.connect();
         if (!CodexReaderHost.accountReady) throw new Error('请先在 Codex CLI 或此处完成官方登录。');
         const session=CodexReaderHost.getSession(key);
         input.projectContext=await CodexReaderHost.projectContext(key,session);
+        for(const file of view.attachments)if(input.attachments.some(sent=>sent.id===file.id))file.retained=true;
         await session.send(input,model.value,effort.value);
         session.projectContextLoaded=true;
         if(question.value===rawQuestion)question.value='';if(context.value===input.context)context.value='';
-        const sentIDs=new Set(input.annotations.map(note=>note.id));view.annotations=view.annotations.filter(note=>!sentIDs.has(note.id));this.renderAnnotations(view);this.saveDraft(view);
+        const sentIDs=new Set(input.annotations.map(note=>note.id));view.annotations=view.annotations.filter(note=>!sentIDs.has(note.id));
+        const sentFiles=new Set(input.attachments.map(file=>file.id));view.attachments=view.attachments.filter(file=>!sentFiles.has(file.id));this.renderAnnotations(view);this.renderAttachments(view);this.saveDraft(view);
       } finally {view.submitting=false;}
     });
     send.addEventListener('click',submit);
@@ -331,6 +338,65 @@ var CodexReaderUI = {
       error.textContent='已保存为 Zotero 笔记；若启用 Zotero 同步，该笔记会按同步设置上传。';
     }));
     this.update(view);
+  },
+  installAttachments(view,action) {
+    const api=CodexReaderAttachments,win=view.body.ownerDocument.defaultView;
+    view.addAttachments=files=>{
+      view.importing=(view.importing || 0)+1;view.attachmentStatus.textContent='正在准备附件…';this.update(view);
+      const task=(view.attachmentQueue || Promise.resolve()).then(async()=>{
+        const errors=[];
+        for(const file of files){
+          try {
+            const existing=view.root.isConnected?view.attachments:(this.drafts.get(view.key)?.attachments || []);
+            const attachment=await api.import(file,win,existing);
+            if(view.root.isConnected){view.attachments.push(attachment);this.renderAttachments(view);this.saveDraft(view);}
+            else {
+              const draft=this.drafts.get(view.key);if(draft){(draft.attachments ||= []).push(attachment);for(const current of this.views.values())if(current.key===view.key){current.attachments=draft.attachments.map(file=>({...file}));this.renderAttachments(current);this.saveDraft(current);}}
+              else await api.discard(attachment);
+            }
+          }catch(error){errors.push(`${file.name || '附件'}：${error.message}`);}
+        }
+        if(errors.length)throw new Error(errors.join('\n'));
+      });
+      view.attachmentQueue=task.catch(()=>{});
+      return task.finally(()=>{view.importing--;view.attachmentStatus.textContent=view.importing?'正在准备附件…':'';this.update(view);});
+    };
+    view.attach.addEventListener('click',action(async()=>{const files=await api.choose(win);if(files.length)await view.addAttachments(files);}));
+    view.question.addEventListener('paste',event=>{
+      const files=api.fromTransfer(event.clipboardData);if(!files.length)return;
+      event.preventDefault();
+      // Preserve accompanying plain text; ordinary text-only paste uses the browser's native behavior.
+      const text=event.clipboardData.getData('text/plain');if(text){view.question.setRangeText(text,view.question.selectionStart,view.question.selectionEnd,'end');this.saveDraft(view);}
+      action(()=>view.addAttachments(files))();
+    });
+    view.root.addEventListener('dragover',event=>{if(api.hasFiles(event.dataTransfer)){event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect='copy';view.composer.classList.add('cr-dragover');}});
+    view.root.addEventListener('dragleave',event=>{if(!event.relatedTarget || !view.root.contains(event.relatedTarget))view.composer.classList.remove('cr-dragover');});
+    view.root.addEventListener('drop',event=>{
+      view.composer.classList.remove('cr-dragover');
+      const files=api.fromTransfer(event.dataTransfer);if(!files.length && !api.hasFiles(event.dataTransfer))return;
+      event.preventDefault();event.stopPropagation();if(files.length)action(()=>view.addAttachments(files))();
+    });
+  },
+  renderAttachments(view) {
+    view.attachmentList.replaceChildren();view.attachmentList.hidden=!view.attachments.length;
+    this.appendAttachments(view,view.attachmentList,view.attachments,true);
+  },
+  appendAttachments(view,list,attachments,editable=false) {
+    const doc=view.body.ownerDocument,h=(tag,props,text)=>this.h(doc,tag,props,text);
+    for(const file of attachments){
+      const card=h('div',{className:'cr-file-card',title:file.name});
+      const src=CodexReaderAttachments.preview(file);
+      if(src){const image=h('img',{className:'cr-file-thumb',src,alt:file.name});image.addEventListener('error',()=>{image.hidden=true;});card.append(image);}
+      else card.append(h('span',{className:'cr-file-icon','aria-hidden':'true'},'▤'));
+      const label=h('div',{className:'cr-file-label'});
+      const size=file.size?file.size>=1024*1024?`${(file.size/1024/1024).toFixed(1)} MB`:`${Math.max(1,Math.ceil(file.size/1024))} KB`:'';
+      label.append(h('span',{className:'cr-file-name'},file.name),h('span',{className:'cr-file-meta'},[size,file.kind==='image'?'图片':file.text?'文本已附上'+(file.truncated?'（部分）':''):'本地文件 · 由 Codex 读取'].filter(Boolean).join(' · ')));card.append(label);
+      if(editable){
+        const remove=h('button',{type:'button',className:'cr-file-remove','aria-label':'移除附件：'+file.name},'×');
+        remove.addEventListener('click',()=>{view.attachments=view.attachments.filter(item=>item.id!==file.id);this.renderAttachments(view);this.saveDraft(view);if(!file.retained)CodexReaderAttachments.discard(file).catch(error=>{view.error.textContent=error.message;});});card.append(remove);
+      }
+      list.append(card);
+    }
   },
   noteID() {return Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);},
   updateProjects(view) {
@@ -442,21 +508,22 @@ var CodexReaderUI = {
     });
   },
   saveDraft(view) {
-    this.drafts.set(view.key,{question:view.question.value,context:view.context.value,annotations:view.annotations.map(note=>({...note})),model:view.model.value || view.preferredModel || '',effort:view.effort.value || view.preferredEffort || ''});
+    this.drafts.set(view.key,{question:view.question.value,context:view.context.value,annotations:view.annotations.map(note=>({...note})),attachments:view.attachments.map(file=>({...file})),model:view.model.value || view.preferredModel || '',effort:view.effort.value || view.preferredEffort || ''});
     view.contextToggle.textContent=view.annotations.length ? `${view.annotations.length} 条注释${view.context.value?' · 已附文本':''}` : view.context.value ? `已附文本 · ${view.context.value.length.toLocaleString()} 字符` : '＋ 添加上下文';
     view.question.style.height='auto';view.question.style.height=Math.min(150,Math.max(54,view.question.scrollHeight))+'px';
   },
   transcript(key,title) {
     const messages=CodexReaderHost.sessions.get(key)?.messages;
     if (!messages?.length) throw new Error('当前会话还没有聊天记录。');
-    return title+'\n\n'+messages.map(m=>(m.role==='user'?'我：':'Codex：')+'\n'+m.text+(m.error?'\n[错误] '+m.error:'')).join('\n\n');
+    return title+'\n\n'+messages.map(m=>(m.role==='user'?'我：':'Codex：')+'\n'+m.text+(m.attachments?.length?'\n[附件] '+m.attachments.map(file=>file.name).join('、'):'')+(m.error?'\n[错误] '+m.error:'')).join('\n\n');
   },
   update(view) {
     if (!view.root.isConnected) return;
     const host=CodexReaderHost;const session=host.sessions.get(view.key);const busy=!!session?.busy;
     view.status.textContent=busy?'Codex 正在回答…':host.status;
     view.connect.textContent=host.rpc && !host.rpc.closed?'重新连接':'连接 Codex';
-    view.send.disabled=busy || !!view.submitting;view.stop.disabled=!busy;view.reset.disabled=busy || !!view.submitting;
+    view.send.disabled=busy || !!view.submitting || !!view.importing;view.stop.disabled=!busy;view.reset.disabled=busy || !!view.submitting;
+    view.attach.disabled=!!view.submitting;
     view.send.hidden=busy;view.stop.hidden=!busy;
     view.model.disabled=busy || !!view.submitting;
     view.deleteCurrent.disabled=busy || !!view.submitting;
@@ -487,6 +554,7 @@ var CodexReaderUI = {
       const content=message.role==='assistant' ? CodexReaderMarkdown.render(view.body.ownerDocument,message.text || (message.status==='inProgress'?'正在思考…':'')) : this.h(view.body.ownerDocument,'div',{className:'cr-text'},message.text);
       if(message.role==='assistant')this.markAnnotations(view,content,messageIndex,messages);
       article.append(content);
+      if(message.attachments?.length){const files=this.h(view.body.ownerDocument,'div',{className:'cr-attachments cr-sent-files'});this.appendAttachments(view,files,message.attachments);article.append(files);}
       if(message.annotations?.length){const notes=this.h(view.body.ownerDocument,'details',{className:'cr-sent-annotations'});notes.append(this.h(view.body.ownerDocument,'summary',{},`${message.annotations.length} 条注释`));for(const [i,note] of message.annotations.entries()){notes.append(this.h(view.body.ownerDocument,'blockquote',{},`${i+1}. ${note.text}`));if(note.comment)notes.append(this.h(view.body.ownerDocument,'p',{},note.comment));}article.append(notes);}
       if (message.error) article.append(this.h(view.body.ownerDocument,'div',{className:'cr-error'},message.error));
       if (message.status==='interrupted') article.append(this.h(view.body.ownerDocument,'div',{className:'cr-small'},'回答已停止'));

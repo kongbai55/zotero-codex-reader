@@ -17,7 +17,7 @@ async function startup({rootURI}) {
     ['locale','codexreader','zh-CN',rootURI+'locale/zh-CN/']
   ]);
   codexScope = {Zotero,Services,ChromeUtils,Components,IOUtils,PathUtils,URL,setTimeout,clearTimeout};
-  for (const file of ['vendor/marked.js','vendor/katex.min.js','markdown.js','core.js','project-watcher.js','projects.js','host.js','sidebar.js','panel.js']) Services.scriptloader.loadSubScript(rootURI+'content/'+file,codexScope,'UTF-8');
+  for (const file of ['vendor/marked.js','vendor/katex.min.js','markdown.js','core.js','attachments.js','project-watcher.js','projects.js','host.js','sidebar.js','panel.js']) Services.scriptloader.loadSubScript(rootURI+'content/'+file,codexScope,'UTF-8');
   codexScope.CodexReaderHost.rootURI=rootURI;
   for (const win of Zotero.getMainWindows()) await onMainWindowLoad({window:win});
   codexScope.CodexReaderUI.install(rootURI,PLUGIN_ID);

@@ -14,9 +14,9 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.5.0.xpi`.
+4. Select `dist/zotero-codex-reader-0.6.0.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
-6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
+6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin prefers the desktop-bundled Codex executable, then looks for a separately installed CLI.
 
 ### Compatibility
 
@@ -38,6 +38,14 @@ The tested Zotero version requires an HTTPS `update_url`, so the plugin uses the
 Automatic background updates are disabled for this plugin at startup. Manual update checks will fail. No developer-hosted update service is contacted or required.
 
 ## Features
+
+### 0.6.0: Drag-and-drop and clipboard attachments
+
+- Drop files or images into the Codex panel, paste screenshots/copied files into the question editor, or click **+** to select multiple files. Ordinary text-only paste remains unchanged.
+- Pending attachments show names, sizes and image thumbnails, with individual removal. Attachment-only messages are supported. Failed submissions retain their attachments for retry; drafts survive switching papers during the current Zotero session.
+- PNG, JPEG, GIF and WebP are identified by their contents and sent as image inputs. Text files (including Markdown, CSV and source code) are decoded locally and included as text, up to 60,000 characters across attachments. Truncation is indicated and the full copy remains accessible. HTML/SVG are inert text, never executable previews.
+- PDFs, Office documents and other files are supplied as local copies for Codex to inspect with read-only tools. Format support depends on the local tool environment; unreadable formats must be reported as such.
+- Limits: 10 files per message, 20 MB per file, 50 MB combined. Adding attachments prepares them locally; sending hands them to Codex. Copies live under the Zotero profile's `codex-reader-workspace/attachments/`, outside the Zotero library. Removing an unsent attachment deletes its copy; copies used in attempted submissions remain available for continued conversations and are not automatically deleted on exit.
 
 ### 0.5.0: File notifications, desktop registration and project conversations
 
@@ -95,7 +103,7 @@ Click **Extract First 20 Pages** to extract text using Zotero's local PDF extrac
 - Maximum extraction length: 60,000 characters
 - A warning is displayed when the extracted text is truncated
 - Scanned documents require OCR before text extraction
-- Images and figures are not analyzed in the current version
+- This text extraction does not include figures; paste screenshots or attach images separately for an image-capable model
 
 **Interactive conversations**
 
@@ -121,6 +129,8 @@ A request can include:
 - Your question
 - The current paper's title
 - Text explicitly included in the context editor
+- Manually attached files/images and their local copy paths
+- Bounded recent project background for new project conversations, as described above
 - Previous context from the current Codex conversation
 
 The plugin does **not** automatically read the full paper unless you explicitly extract or add text.

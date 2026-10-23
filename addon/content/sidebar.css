@@ -33,6 +33,9 @@
 .cr-root .cr-user {width:fit-content;max-width:88%;margin-left:auto;background:var(--cr-bubble);border-radius:16px;padding:10px 14px;}
 .cr-root .cr-user > strong {display:none;}
 .cr-root .cr-text {white-space:pre-wrap;line-height:1.8;}
+.cr-root .cr-log,.cr-root .cr-text,.cr-root .cr-text * {user-select:text;-moz-user-select:text;}
+.cr-root .cr-log {cursor:text;}
+.cr-root .cr-text button {user-select:none;-moz-user-select:none;}
 .cr-root .cr-markdown {white-space:normal;}
 .cr-root .cr-markdown p {margin:0 0 12px;}
 .cr-root .cr-markdown :is(h1,h2,h3,h4,h5,h6) {line-height:1.4;margin:20px 0 10px;font-weight:650;}
@@ -63,8 +66,9 @@
 .cr-root .cr-annotation-card textarea:last-child {min-height:55px;}
 .cr-root .cr-selection-add {position:absolute;z-index:5;background:var(--cr-bg);border:1px solid var(--cr-border);box-shadow:0 3px 12px #0002;font-size:12px;}
 .cr-root .cr-annotation-mark {background:#e1edff;color:inherit;}
-.cr-root .cr-note-popover {position:absolute;z-index:5;width:290px;max-width:calc(100% - 16px);padding:12px;background:var(--cr-bg);border:1px solid var(--cr-border);border-radius:17px;box-shadow:0 5px 20px #0002;}
+.cr-root .cr-note-popover {position:absolute;z-index:5;width:290px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);overflow:auto;padding:12px;background:var(--cr-bg);border:1px solid var(--cr-border);border-radius:17px;box-shadow:0 5px 20px #0002;}
 .cr-root .cr-note-popover textarea {width:100%;min-height:50px;border:0;outline:none;resize:vertical;background:transparent;}
+.cr-root .cr-note-quote {font-size:12px;max-height:75px;overflow:auto;margin:0 0 8px;padding-left:8px;border-left:2px solid var(--cr-border);white-space:pre-wrap;}
 .cr-root .cr-note-controls {display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-top:8px;}
 .cr-root .cr-note-controls button:first-child {margin-right:auto;}
 .cr-root .cr-note-controls .cr-note-save {background:var(--cr-accent);color:var(--cr-bg);border-radius:16px;}

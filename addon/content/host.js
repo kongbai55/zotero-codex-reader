@@ -84,7 +84,7 @@ var CodexReaderHost = {
       // Drain, discard, and never persist stderr: it can include sensitive diagnostic content.
       this.readLoop(process.stderr,()=>{},null).catch(()=>{});
       process.wait().then(()=>rpc.close(),()=>rpc.close());
-      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.6.0'},capabilities:{experimentalApi:true}});
+      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.6.1'},capabilities:{experimentalApi:true}});
       await rpc.notify('initialized');
       this.version = init.userAgent || 'Codex';
       const account = await rpc.request('account/read',{refreshToken:false});

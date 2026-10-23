@@ -32,6 +32,26 @@ var CodexReaderPanel = {
     state.resizeObserver=new win.ResizeObserver(state.resize);
     state.resizeObserver.observe(inner);state.resizeObserver.observe(sidenav);
     win.addEventListener('resize',state.resize);
+    // Zotero captures file dragover on the window and immediately selects the
+    // library for PDFs/EPUB/HTML. Observe at the chrome root before that handler,
+    // including the approach across the reader on the way to the composer.
+    state.dragRoot=win.windowRoot || win;
+    state.drag=event=>{
+      if(!state.active || !state.view || state.element.hidden || !CodexReaderAttachments.hasFiles(event.dataTransfer))return;
+      const view=state.view,inside=state.element.contains(event.target);
+      event.preventDefault();event.stopImmediatePropagation();
+      event.dataTransfer.dropEffect=inside?'copy':'none';
+      view.composer.classList.toggle('cr-dragover',inside && event.type!=='drop');
+      if(event.type==='drop' && inside){
+        const files=CodexReaderAttachments.fromTransfer(event.dataTransfer);
+        if(files.length){view.error.textContent='';view.addAttachments(files).catch(error=>{view.error.textContent=error.message;});}
+      }
+    };
+    state.dragClear=()=>state.view?.composer.classList.remove('cr-dragover');
+    for(const type of ['dragenter','dragover','drop'])state.dragRoot.addEventListener(type,state.drag,true);
+    state.dragRoot.addEventListener('dragend',state.dragClear,true);
+    state.dragLeave=event=>{if(!event.relatedTarget || !state.element.contains(event.relatedTarget))state.dragClear();};
+    state.element.addEventListener('dragleave',state.dragLeave);
     this.windows.set(win,state);
     return state;
   },
@@ -105,6 +125,7 @@ var CodexReaderPanel = {
     }
   },
   close(state) {
+    state.dragClear();
     state.active=false;
     if(state.timer!==null)state.win.clearTimeout(state.timer);
     state.timer=null;this.releaseView(state);
@@ -114,6 +135,9 @@ var CodexReaderPanel = {
     const state=this.windows.get(win);if(!state)return;
     this.close(state);state.resizeObserver.disconnect();
     state.sidenav.removeEventListener('click',state.click,true);
+    for(const type of ['dragenter','dragover','drop'])state.dragRoot.removeEventListener(type,state.drag,true);
+    state.dragRoot.removeEventListener('dragend',state.dragClear,true);
+    state.element.removeEventListener('dragleave',state.dragLeave);
     win.removeEventListener('resize',state.resize);state.element.remove();this.windows.delete(win);
   },
   uninstall() {

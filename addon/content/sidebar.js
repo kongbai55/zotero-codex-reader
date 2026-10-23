@@ -1,5 +1,5 @@
 var CodexReaderUI = {
-  views:new Map(), drafts:new Map(), selectionHandler:null, paneID:null, rootURI:'',
+  views:new Map(), drafts:new Map(), editorGuards:new Map(), selectionHandler:null, paneID:null, rootURI:'',
   h(doc,tag,props = {},text) {
     const node = doc.createElementNS('http://www.w3.org/1999/xhtml',tag);
     for (const [key,value] of Object.entries(props)) {
@@ -9,6 +9,20 @@ var CodexReaderUI = {
     }
     if (text !== undefined) node.textContent = text;
     return node;
+  },
+  protectCommentEditor(editor) {
+    editor.setAttribute('data-codex-comment-editor','true');
+    const win=editor.ownerDocument.defaultView,root=win.windowRoot || win;
+    if(this.editorGuards.has(root))return;
+    const listener=event=>{
+      if(!event.target?.closest?.('[data-codex-comment-editor]') || ['Escape','Tab'].includes(event.key))return;
+      // Zotero's reader captures keys on its window before textarea handlers.
+      // The chrome window root runs first. Keep native editing, cut/copy/paste
+      // and IME defaults, but do not let reader shortcuts consume these keys.
+      event.stopImmediatePropagation();
+    };
+    for(const type of ['keydown','keypress','keyup'])root.addEventListener(type,listener,true);
+    this.editorGuards.set(root,listener);
   },
   install(rootURI,pluginID) {
     this.rootURI = rootURI;
@@ -27,6 +41,8 @@ var CodexReaderUI = {
       if (!text) return;
       const popup=this.h(event.doc,'div',{className:'cr-selection-context'});
       const comment=this.h(event.doc,'textarea',{rows:2,placeholder:'添加可选评论…','aria-label':'选文评论'});
+      this.protectCommentEditor(comment);
+      popup.setAttribute('data-tabstop','1');
       const button = this.h(event.doc,'button',{type:'button'},'添加到对话');
       popup.append(comment,button);
       button.addEventListener('click',()=>{
@@ -426,7 +442,7 @@ var CodexReaderUI = {
       header.append(h('strong',{},source),remove);
       const quote=h('textarea',{rows:3,value:note.text,'aria-label':'注释 '+(index+1)+' 的选文'});
       const comment=h('textarea',{rows:2,value:note.comment || '',placeholder:'添加可选评论…','aria-label':'注释 '+(index+1)+' 的评论'});
-      quote.addEventListener('input',()=>{note.text=quote.value;chip.textContent=`${index+1} ${note.text.slice(0,26)}${note.text.length>26?'…':''}`;this.saveDraft(view);this.update(view);});
+      quote.addEventListener('input',()=>{note.text=quote.value;delete note.anchorText;chip.textContent=`${index+1} ${note.text.slice(0,26)}${note.text.length>26?'…':''}`;this.saveDraft(view);this.update(view);});
       comment.addEventListener('input',()=>{note.comment=comment.value;chip.title=comment.value || note.text;this.saveDraft(view);this.update(view);});
       card.append(header,quote,comment);view.annotationList.append(card);
       const chip=h('button',{type:'button',className:'cr-annotation-chip',title:note.comment || note.text},`${index+1} ${note.text.slice(0,26)}${note.text.length>26?'…':''}`);
@@ -451,23 +467,37 @@ var CodexReaderUI = {
     const doc=view.body.ownerDocument;
     const popup=this.h(doc,'button',{type:'button',className:'cr-selection-add',hidden:true},'添加到对话');view.root.querySelector('.cr-main').append(popup);
     let pending;
-    view.log.addEventListener('mouseup',()=>{
+    const capture=()=>{
       const selection=doc.defaultView.getSelection();popup.hidden=true;pending=null;
-      if(!selection?.rangeCount || selection.isCollapsed || view.submitting)return;
-      const range=selection.getRangeAt(0),start=range.startContainer.parentElement?.closest('.cr-assistant .cr-text');
+      if(!view.root.isConnected || !selection?.rangeCount || selection.isCollapsed)return;
+      const range=selection.getRangeAt(0),element=range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement,start=element?.closest('.cr-assistant .cr-text');
+      if(!view.log.contains(start))return;
       if(!start || !start.contains(range.endContainer))return;
       const raw=selection.toString(),text=raw.trim();if(!text || text.length>CodexReaderCore.MAX_CONTEXT)return;
       const prefix=range.cloneRange();prefix.selectNodeContents(start);prefix.setEnd(range.startContainer,range.startOffset);
       const fragment=prefix.cloneContents();for(const node of fragment.querySelectorAll('.cr-annotation-pin,.cr-code-bar'))node.remove();
-      pending={source:'response',text,comment:'',messageIndex:Number(start.closest('.cr-message').dataset.messageIndex),start:fragment.textContent.length+raw.indexOf(text)};
+      const selected=range.cloneContents();for(const node of selected.querySelectorAll('.cr-annotation-pin,.cr-code-bar'))node.remove();
+      const canonical=selected.textContent,anchorText=canonical.trim();
+      pending={source:'response',text,comment:'',messageIndex:Number(start.closest('.cr-message').dataset.messageIndex),start:fragment.textContent.length+Math.max(0,canonical.indexOf(anchorText)),...(anchorText && anchorText!==text?{anchorText}:{})};
       const r=range.getBoundingClientRect(),base=view.root.querySelector('.cr-main').getBoundingClientRect();
-      popup.style.left=Math.max(8,Math.min(base.width-130,r.left-base.left))+'px';popup.style.top=Math.max(60,r.top-base.top-38)+'px';popup.hidden=false;
-    });
+      popup.style.left=Math.max(8,Math.min(base.width-130,r.left-base.left))+'px';popup.style.top=Math.max(60,Math.min(base.height-42,r.top-base.top-38))+'px';popup.hidden=false;
+    };
+    // selectionchange also covers keyboard selection and mouse release outside
+    // the log. Reading the current document selection avoids stale excerpts.
+    view.onResponseSelection=()=>{
+      if(view.selectionTimer!==undefined)doc.defaultView.clearTimeout(view.selectionTimer);
+      view.selectionTimer=doc.defaultView.setTimeout(()=>{view.selectionTimer=undefined;capture();if(doc.defaultView.getSelection()?.isCollapsed)this.update(view);},0);
+    };
+    doc.addEventListener('selectionchange',view.onResponseSelection);
+    view.log.addEventListener('mouseup',capture);
+    view.log.addEventListener('keyup',capture);
+    view.log.tabIndex=0;
     popup.addEventListener('mousedown',event=>event.preventDefault());
     popup.addEventListener('click',()=>{
       if(!pending)return;const note={id:this.noteID(),...pending};view.annotations.push(note);popup.hidden=true;pending=null;
+      doc.defaultView.getSelection()?.removeAllRanges();
       this.renderAnnotations(view);this.saveDraft(view);view.lastMessages=null;this.update(view);
-      this.openNoteEditor(view,note,view.log.querySelector('.cr-annotation-pin:last-of-type'));
+      this.openNoteEditor(view,note,view.log.querySelector(`[data-note-id="${note.id}"]`));
     });
     view.log.addEventListener('scroll',()=>{popup.hidden=true;});
   },
@@ -476,6 +506,7 @@ var CodexReaderUI = {
     const box=this.h(doc,'div',{className:'cr-note-popover',role:'dialog','aria-label':'选文注释'});
     const editable=view.annotations.some(n=>n.id===note.id);
     const comment=this.h(doc,'textarea',{rows:2,value:note.comment || '',placeholder:'添加可选评论…','aria-label':'注释评论',readOnly:!editable});
+    this.protectCommentEditor(comment);
     const controls=this.h(doc,'div',{className:'cr-note-controls'});
     const close=this.h(doc,'button',{type:'button'},editable?'取消':'关闭');close.addEventListener('click',()=>box.remove());controls.append(close);
     if(editable){
@@ -483,10 +514,11 @@ var CodexReaderUI = {
       remove.addEventListener('click',()=>{view.annotations=view.annotations.filter(n=>n.id!==note.id);box.remove();this.renderAnnotations(view);this.saveDraft(view);this.update(view);});
       const save=this.h(doc,'button',{type:'button',className:'cr-note-save'},'保存');save.addEventListener('click',()=>{note.comment=comment.value;box.remove();this.renderAnnotations(view);this.saveDraft(view);this.update(view);});controls.prepend(remove);controls.append(save);
     }
-    box.append(comment,controls);main.append(box);
+    box.append(this.h(doc,'blockquote',{className:'cr-note-quote'},note.text),comment,controls);main.append(box);
     const base=main.getBoundingClientRect(),r=anchor?.getBoundingClientRect();
     box.style.left=Math.max(8,Math.min(base.width-300,(r?.left || base.left+20)-base.left))+'px';
-    box.style.top=Math.max(60,Math.min(base.height-170,(r?.top || base.top+100)-base.top-145))+'px';
+    const height=box.getBoundingClientRect().height;
+    box.style.top=Math.max(8,Math.min(base.height-height-8,(r?.top || base.top+height+16)-base.top-height-8))+'px';
     box.addEventListener('keydown',event=>{if(event.key==='Escape'){event.stopPropagation();box.remove();}});comment.focus();
   },
   markAnnotations(view,node,messageIndex,messages) {
@@ -496,14 +528,15 @@ var CodexReaderUI = {
       const walker=node.ownerDocument.createTreeWalker(node,4),texts=[];let n,offset=0;
       while((n=walker.nextNode()))if(!n.parentElement.closest('.cr-annotation-pin,.cr-code-bar')){texts.push({node:n,start:offset,end:offset+n.length});offset+=n.length;}
       const plain=texts.map(t=>t.node.data).join('');
-      const start=plain.slice(note.start,note.start+note.text.length)===note.text?note.start:plain.indexOf(note.text);
+      const needle=note.anchorText || note.text;
+      const start=plain.slice(note.start,note.start+needle.length)===needle?note.start:plain.indexOf(needle);
       if(start<0)return;
       let last;
-      for(const part of texts){const from=Math.max(0,start-part.start),to=Math.min(part.node.length,start+note.text.length-part.start);if(from>=to)continue;
+      for(const part of texts){const from=Math.max(0,start-part.start),to=Math.min(part.node.length,start+needle.length-part.start);if(from>=to)continue;
         const range=node.ownerDocument.createRange();range.setStart(part.node,from);range.setEnd(part.node,to);
         const mark=this.h(node.ownerDocument,'mark',{className:'cr-annotation-mark',title:note.comment || '选文注释'});range.surroundContents(mark);last=mark;
       }
-      if(last){const pin=this.h(node.ownerDocument,'button',{type:'button',className:'cr-annotation-pin',title:note.comment || note.text,'aria-label':'注释 '+(index+1)},String(index+1));
+      if(last){const pin=this.h(node.ownerDocument,'button',{type:'button',className:'cr-annotation-pin',title:note.comment || note.text,'aria-label':'注释 '+(index+1),'data-note-id':note.id},String(index+1));
         pin.addEventListener('click',()=>this.openNoteEditor(view,note,pin));last.after(pin);}
     });
   },
@@ -542,6 +575,9 @@ var CodexReaderUI = {
     const messages=session?.messages || [];
     const signature=JSON.stringify([messages,view.annotations]);
     if (view.lastMessages===signature) return;
+    // Streaming updates must not destroy a selection in an earlier answer.
+    const selection=view.body.ownerDocument.defaultView.getSelection();
+    if(selection?.rangeCount && !selection.isCollapsed && view.log.contains(selection.getRangeAt(0).commonAncestorContainer))return;
     view.lastMessages=signature;
     const nearBottom=view.log.scrollHeight-view.log.scrollTop-view.log.clientHeight<90;
     view.log.replaceChildren();
@@ -569,6 +605,8 @@ var CodexReaderUI = {
   },
   destroyView(body) {
     const view=this.views.get(body);if (!view) return;
+    const doc=view.body.ownerDocument;doc.removeEventListener('selectionchange',view.onResponseSelection);
+    if(view.selectionTimer!==undefined)doc.defaultView.clearTimeout(view.selectionTimer);
     view.body.ownerDocument.defaultView.removeEventListener('focus',view.onWindowFocus);
     if(typeof CodexReaderPanel!=='undefined')CodexReaderPanel.detachView(view);
     this.saveDraft(view);this.views.delete(body);view.root.remove();if(!this.views.size && this.projectListener)CodexReaderProjects.stop(this.projectListener);
@@ -581,5 +619,7 @@ var CodexReaderUI = {
     CodexReaderProjects.stop(this.projectListener);
     for (const body of [...this.views.keys()]) this.destroyView(body);
     this.drafts.clear();
+    for(const [root,listener] of this.editorGuards){try{for(const type of ['keydown','keypress','keyup'])root.removeEventListener(type,listener,true);}catch(_){}}
+    this.editorGuards.clear();
   }
 };

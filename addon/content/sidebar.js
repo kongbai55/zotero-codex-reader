@@ -12,6 +12,7 @@ var CodexReaderUI = {
   },
   install(rootURI,pluginID) {
     this.rootURI = rootURI;
+    this.projectListener=()=>{for(const view of this.views.values())this.update(view);};
     this.paneID = Zotero.ItemPaneManager.registerSection({
       paneID:'codex-reader',pluginID,
       header:{l10nID:'codex-reader-title',icon:rootURI+'content/icon.svg'},
@@ -47,8 +48,6 @@ var CodexReaderUI = {
     Zotero.Reader.registerEventListener('renderTextSelectionPopup',this.selectionHandler,pluginID);
     this.updateListener = ()=>{for (const view of this.views.values()) this.update(view);};
     CodexReaderHost.listeners.add(this.updateListener);
-    this.projectListener=()=>{for(const view of this.views.values())this.update(view);};
-    CodexReaderProjects.start(this.projectListener);
   },
   findReader(doc,item) {
     const win = doc.defaultView;
@@ -92,7 +91,7 @@ var CodexReaderUI = {
     const saveHome=h('button',{type:'button'},'保存项目同步目录');details.append(h('p',{className:'cr-small'},'Codex 项目同步配置目录（仅用于读取桌面项目列表）'),homePath,saveHome);
     const model = h('select',{'aria-label':'模型'});
     const effort = h('select',{'aria-label':'推理强度',title:'推理强度'});
-    const historyLoad = h('button',{type:'button'},'加载 Codex 历史');
+    const historyLoad = h('button',{type:'button'},'加载 Codex 对话');
     details.append(h('p',{className:'cr-small'},'App 的专属工具及进行中状态不保证同步。'));
     const quota = h('button',{type:'button'},'查看账户用量');const quotaInfo = h('div',{className:'cr-small'}); details.append(quota,quotaInfo);
     const projectDetails=h('details',{className:'cr-projects cr-panel'});projectDetails.append(h('summary',{},'项目与共享记忆'));
@@ -100,8 +99,10 @@ var CodexReaderUI = {
     const projectCreate=h('button',{type:'button'},'创建项目'),projectChoose=h('button',{type:'button'},'添加已有文件夹'),projectImport=h('button',{type:'button'},'立即同步 Codex 项目');
     const memory=h('textarea',{rows:9,'aria-label':'项目共享记忆',placeholder:'项目目标、术语、偏好和已确认结论…'});
     const memoryReload=h('button',{type:'button'},'重新载入记忆'),memorySave=h('button',{type:'button'},'保存共享记忆'),pathCopy=h('button',{type:'button'},'复制项目路径');
+    const projectPush=h('button',{type:'button'},'同步到 Codex');
     const projectClose=h('button',{type:'button',className:'cr-panel-close'},'完成');
-    projectDetails.append(projectPath,h('p',{className:'cr-small'},'自动读取 Codex 桌面项目，每 5 秒同步名称、目录和移除状态。选择同一项目后共用 AGENTS.md 记忆；更改项目会开始独立会话。在这里创建的本地文件夹仍需添加到 Codex。'),projectCreate,projectChoose,projectImport,memory,memoryReload,memorySave,pathCopy,projectClose);
+    projectDetails.append(projectPath,h('p',{className:'cr-small'},'项目文件变化时自动同步，打开列表或返回 Zotero 时也会检查。新建或添加项目会打开 Codex，由桌面端接收目录；若出现目录授权，请完成后返回，项目会自动关联。不会自动发送聊天。'),projectCreate,projectChoose,projectImport,projectPush,memory,memoryReload,memorySave,pathCopy,projectClose);
+    memory.before(h('p',{className:'cr-small'},'以下是 AGENTS.md 项目指导。历史对话在会话列表中；新会话会带入最多 16,000 字符的近期本地项目背景。ChatGPT 云端聊天和账户长期记忆请在桌面端查看。'));
     const log = h('div',{className:'cr-log',role:'log','aria-label':'聊天记录'});
     const contextDetails = h('details',{className:'cr-context cr-panel'});contextDetails.append(h('summary',{},'注释与论文上下文'));
     const annotationList=h('div',{className:'cr-annotation-list'});
@@ -156,7 +157,7 @@ var CodexReaderUI = {
     const historyList=h('div',{className:'cr-history-list'});
     historyList.append(h('p',{className:'cr-small'},'点击加载，查看最近的 Codex 对话。'));
     historyLoad.className='cr-history-load';
-    nav.append(navHeading,projectSelect,projectSyncInfo,projectManage,current,deleteCurrent,historyLoad,historyList,h('p',{className:'cr-small'},'点击历史会话创建分支；后续消息不会同步回原对话。'));
+    nav.append(navHeading,projectSelect,projectSyncInfo,projectManage,current,deleteCurrent,historyLoad,historyList,h('p',{className:'cr-small'},'选择项目后显示该项目的本地 Codex 对话；点击继续原会话。新会话会附上近期项目对话背景。'));
     const settingsClose=h('button',{type:'button',className:'cr-panel-close','aria-label':'关闭连接设置'},'关闭');
     details.append(bar,copy,note,settingsClose);
     const contextClose=h('button',{type:'button',className:'cr-panel-close','aria-label':'关闭上下文预览'},'完成');
@@ -164,9 +165,9 @@ var CodexReaderUI = {
     for(const panel of [details,contextDetails,projectDetails])panel.append(h('div',{className:'cr-panel-error cr-error',role:'alert'}));
     main.append(header,heading,conversation,bottom,details,contextDetails,projectDetails);
     shell.append(nav,main);root.append(style,mathStyle,shell);body.replaceChildren(root);
-    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy,projectSyncInfo};
+    view = {body,root,key,reader,attachmentID,paper,title,status,connect,login,reset,stop,log,context,contextInfo,question,send,error,model,effort,lastModelJSON:'',contextDetails,welcome,contextToggle,nav,toggle,annotationList,annotationPreview,annotations:[],deleteCurrent,projectSelect,projectPath,projectDetails,memory,memoryReload,memorySave,pathCopy,projectClose,projectSyncInfo,projectPush};
     exitPanel.addEventListener('click',()=>{if(view.overlay)CodexReaderPanel.close(view.overlay);});
-    const setNav=open=>{nav.hidden=!open;root.classList.toggle('cr-nav-open',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'收起会话列表':'展开会话列表');};
+    const setNav=open=>{nav.hidden=!open;root.classList.toggle('cr-nav-open',open);toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'收起会话列表':'展开会话列表');if(open){CodexReaderProjects.sync().catch(()=>{});if(CodexReaderProjects.current(key))view.loadHistory?.().catch(e=>{error.textContent=e.message;});}};
     toggle.addEventListener('click',()=>setNav(nav.hidden));
     navClose.addEventListener('click',()=>{setNav(false);toggle.focus();});
     current.addEventListener('click',()=>{setNav(false);question.focus();});
@@ -179,6 +180,7 @@ var CodexReaderUI = {
     contextDetails.addEventListener('toggle',()=>contextToggle.setAttribute('aria-expanded',String(contextDetails.open)));
     root.addEventListener('keydown',event=>{if(event.key==='Escape'){if(projectDetails.open){projectDetails.open=false;projectManage.focus();}else if(contextDetails.open){contextDetails.open=false;contextToggle.focus();}else if(details.open){details.open=false;settingsToggle.focus();}else {setNav(false);toggle.focus();}event.stopPropagation();}});
     this.views.set(body,view);
+    if(this.projectListener)CodexReaderProjects.start(this.projectListener);
     const draft = this.drafts.get(key); if (draft) {question.value=draft.question;context.value=draft.context;view.annotations=(draft.annotations || []).map(note=>({...note}));view.preferredModel=draft.model;view.preferredEffort=draft.effort;}
     this.renderAnnotations(view);this.saveDraft(view);
     model.addEventListener('change',()=>{view.lastEffortJSON='';this.updateEffort(view,true);this.saveDraft(view);});
@@ -189,17 +191,19 @@ var CodexReaderUI = {
       const project=CodexReaderProjects.current(key),original=project?await CodexReaderProjects.readMemory(project.path):'';
       if(CodexReaderProjects.current(key)?.path!==project?.path)return;
       view.memoryPath=project?.path;view.memoryOriginal=original;
-      memory.value=view.memoryOriginal;memory.disabled=!project || !!project.missing;memorySave.disabled=memory.disabled;memoryReload.disabled=memory.disabled;pathCopy.disabled=!project;
+      memory.value=view.memoryOriginal;memory.disabled=!project || !!project.missing;memory.readOnly=!!project?.contextMirror;memorySave.disabled=memory.disabled || memory.readOnly;memoryReload.disabled=memory.disabled;pathCopy.disabled=!project;
     };
     const bindProject=async path=>{
       if(view.submitting || CodexReaderHost.sessions.get(key)?.busy)throw new Error('请先停止回答，再切换项目。');
-      await CodexReaderHost.clearSession(key);CodexReaderProjects.bind(key,path);this.updateProjects(view);await reloadMemory();
+      await CodexReaderHost.clearSession(key);CodexReaderProjects.bind(key,path);this.updateProjects(view);await reloadMemory();await view.loadHistory?.();
     };
     projectSelect.addEventListener('change',action(async()=>{try{await bindProject(projectSelect.value);}finally{this.updateProjects(view);}}));
-    projectManage.addEventListener('click',action(async()=>{setNav(false);setPanel(projectDetails,true);await reloadMemory();}));
+    projectManage.addEventListener('click',action(async()=>{setNav(false);setPanel(projectDetails,true);await CodexReaderProjects.sync().catch(()=>{});await reloadMemory();}));
     projectClose.addEventListener('click',()=>{projectDetails.open=false;question.focus();});
-    projectCreate.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView,true);if(p)await bindProject(p.path);}));
-    projectChoose.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView);if(p)await bindProject(p.path);}));
+    projectCreate.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView,true);if(p)await bindProject(CodexReaderProjects.identity(p));}));
+    projectChoose.addEventListener('click',action(async()=>{const p=await CodexReaderProjects.choose(doc.defaultView);if(p)await bindProject(CodexReaderProjects.identity(p));}));
+    projectPush.addEventListener('click',action(async()=>{await CodexReaderProjects.sendToCodex(CodexReaderProjects.current(key));}));
+    view.onWindowFocus=()=>CodexReaderProjects.sync().catch(()=>{});doc.defaultView.addEventListener('focus',view.onWindowFocus);
     projectImport.addEventListener('click',action(async()=>{
       await CodexReaderProjects.sync();this.updateProjects(view);
     }));
@@ -210,6 +214,7 @@ var CodexReaderUI = {
     memoryReload.addEventListener('click',action(reloadMemory));
     memorySave.addEventListener('click',action(async()=>{
       const project=CodexReaderProjects.current(key);if(!project || project.missing || project.path!==view.memoryPath)throw new Error('请先选择可用项目并重新载入记忆。');
+      if(project.contextMirror)throw new Error('这是由 Codex/ChatGPT 管理的只读项目说明，请在 Codex 中编辑项目指令。');
       const affected=[...CodexReaderHost.sessions].filter(([,s])=>s.cwd===project.path);
       if(affected.some(([,s])=>s.busy) || [...this.views.values()].some(v=>v.submitting && CodexReaderProjects.current(v.key)?.path===project.path))throw new Error('请先停止此项目中正在生成的回答。');
       await CodexReaderProjects.saveMemory(project.path,memory.value,view.memoryOriginal);view.memoryOriginal=memory.value;
@@ -243,18 +248,22 @@ var CodexReaderUI = {
       Services.prefs.setStringPref('extensions.codexreader.binary',path.value.trim());
       await CodexReaderHost.disconnect();await CodexReaderHost.connect();
     }));
-    historyLoad.addEventListener('click',action(async()=>{
+    const loadHistory=async()=>{
+      const token=view.historyToken=(view.historyToken || 0)+1;
       historyLoad.disabled=true;
       try {
-        const threads=await CodexReaderHost.listHistory();historyList.replaceChildren();
-        if (!threads.length) historyList.append(h('p',{className:'cr-small'},'暂无历史会话。'));
+        const threads=await CodexReaderHost.listHistory(key);if(token!==view.historyToken || !root.isConnected)return;
+        historyList.replaceChildren();
+        if (!threads.length) historyList.append(h('p',{className:'cr-small'},'此项目暂无本地 Codex 对话。ChatGPT 云端聊天请在 Codex 中打开项目查看。'));
         for (const thread of threads) {
-          const label=(thread.name || thread.preview || thread.id).slice(0,100);
-          const entry=h('button',{type:'button',className:'cr-history-entry',title:'分支继续：'+label},label);
+          let label=thread.name || thread.preview || thread.id;
+          if(label.startsWith('User question:\n'))label=label.slice('User question:\n'.length).split('\nPaper title (untrusted metadata):')[0].trim();
+          label=label.slice(0,100);
+          const entry=h('button',{type:'button',className:'cr-history-entry',title:'继续原会话：'+label},label);
           entry.addEventListener('click',action(async()=>{
             if(view.submitting || CodexReaderHost.sessions.get(key)?.busy)throw new Error('请先停止正在生成的回答。');
             entry.disabled=true;
-            try {await CodexReaderHost.forkHistory(key,thread.id);setNav(false);question.focus();}
+            try {await CodexReaderHost.resumeHistory(key,thread.id);setNav(false);question.focus();}
             finally {entry.disabled=false;}
           }));
           const row=h('div',{className:'cr-history-row'});
@@ -266,8 +275,8 @@ var CodexReaderUI = {
             finally {remove.disabled=false;entry.disabled=false;}
           }));row.append(entry,remove);historyList.append(row);
         }
-      } finally {historyLoad.disabled=false;}
-    }));
+      } finally {if(token===view.historyToken)historyLoad.disabled=false;}
+    };view.loadHistory=loadHistory;historyLoad.addEventListener('click',action(loadHistory));
     quota.addEventListener('click',action(async()=>{
       const rpc=await CodexReaderHost.connect();const result=await rpc.request('account/rateLimits/read',{});
       const limits=result.rateLimits;
@@ -297,7 +306,9 @@ var CodexReaderUI = {
         await CodexReaderHost.connect();
         if (!CodexReaderHost.accountReady) throw new Error('请先在 Codex CLI 或此处完成官方登录。');
         const session=CodexReaderHost.getSession(key);
+        input.projectContext=await CodexReaderHost.projectContext(key,session);
         await session.send(input,model.value,effort.value);
+        session.projectContextLoaded=true;
         if(question.value===rawQuestion)question.value='';if(context.value===input.context)context.value='';
         const sentIDs=new Set(input.annotations.map(note=>note.id));view.annotations=view.annotations.filter(note=>!sentIDs.has(note.id));this.renderAnnotations(view);this.saveDraft(view);
       } finally {view.submitting=false;}
@@ -325,11 +336,16 @@ var CodexReaderUI = {
   updateProjects(view) {
     const data=CodexReaderProjects.load(),path=data.bindings[view.key] || '',signature=JSON.stringify(data.projects);
     if(view.lastProjects!==signature){view.lastProjects=signature;view.projectSelect.replaceChildren(this.h(view.body.ownerDocument,'option',{value:''},'独立论文 · 选择项目'));
-      for(const p of data.projects)view.projectSelect.append(this.h(view.body.ownerDocument,'option',{value:CodexReaderProjects.identity(p),title:(p.roots || [p.path]).join('\n'),disabled:!!p.missing},p.name+(p.missing?'（已在 Codex 移除）':'')));
+      for(const p of data.projects){
+        if((p.source==='legacy' || p.missing) && CodexReaderProjects.identity(p)!==path)continue;
+        view.projectSelect.append(this.h(view.body.ownerDocument,'option',{value:CodexReaderProjects.identity(p),title:(p.roots || [p.path]).join('\n'),disabled:!!p.missing},p.name+(p.source==='legacy'?'（旧目录，非 Codex 项目）':p.missing?'（已在 Codex 移除）':p.registration==='pending'?'（等待 Codex 接收）':'')));
+      }
     }
     view.projectSelect.value=path;const project=CodexReaderProjects.current(view.key),projectSignature=JSON.stringify(project);
     view.projectSyncInfo.textContent=CodexReaderProjects.status;
-    if(view.lastProjectPath!==projectSignature){view.lastProjectPath=projectSignature;view.projectPath.textContent=project?`${project.name}${project.missing?'（已移除，请重新选择）':''}\n${project.path}`:'尚未选择项目。';}
+    const historyButton=view.nav.querySelector('.cr-history-load');if(historyButton)historyButton.textContent=project?`刷新 ${project.name} 的对话`:'加载 Codex 对话';
+    view.projectPush.disabled=!project || !!project.missing;view.projectPush.textContent=project?.source==='codex'?'在 Codex 中打开':'同步到 Codex';
+    if(view.lastProjectPath!==projectSignature){view.lastProjectPath=projectSignature;view.projectPath.textContent=project?`${project.name}${project.missing?'（已移除，请重新选择）':''}\n${project.path}${project.contextMirror?'\n项目指导由 Codex/ChatGPT 管理，只读。':''}`:'尚未选择项目。';}
   },
   renderAnnotations(view) {
     const doc=view.body.ownerDocument,h=(tag,props,text)=>this.h(doc,tag,props,text);
@@ -467,6 +483,7 @@ var CodexReaderUI = {
       const article=this.h(view.body.ownerDocument,'article',{className:'cr-message cr-'+message.role,'data-message-index':messageIndex});
       article.append(this.h(view.body.ownerDocument,'strong',{},message.role==='user'?'你':'Codex'));
       if (message.context) article.append(this.h(view.body.ownerDocument,'div',{className:'cr-small'},`附带 ${message.context.length} 字符论文上下文`));
+      if(message.projectContextLength)article.append(this.h(view.body.ownerDocument,'div',{className:'cr-small'},`已载入 ${message.projectContextLength} 字符近期项目对话背景`));
       const content=message.role==='assistant' ? CodexReaderMarkdown.render(view.body.ownerDocument,message.text || (message.status==='inProgress'?'正在思考…':'')) : this.h(view.body.ownerDocument,'div',{className:'cr-text'},message.text);
       if(message.role==='assistant')this.markAnnotations(view,content,messageIndex,messages);
       article.append(content);
@@ -484,8 +501,9 @@ var CodexReaderUI = {
   },
   destroyView(body) {
     const view=this.views.get(body);if (!view) return;
+    view.body.ownerDocument.defaultView.removeEventListener('focus',view.onWindowFocus);
     if(typeof CodexReaderPanel!=='undefined')CodexReaderPanel.detachView(view);
-    this.saveDraft(view);this.views.delete(body);view.root.remove();
+    this.saveDraft(view);this.views.delete(body);view.root.remove();if(!this.views.size && this.projectListener)CodexReaderProjects.stop(this.projectListener);
   },
   uninstall() {
     if(typeof CodexReaderPanel!=='undefined')CodexReaderPanel.uninstall();

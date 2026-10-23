@@ -11,6 +11,14 @@ var CodexReaderHost = {
     const candidates = [];
     if (configured) candidates.push(configured);
     if (Zotero.isWin) {
+      if(env.CODEX_CLI_PATH)candidates.push(env.CODEX_CLI_PATH);
+      if(env.LOCALAPPDATA){
+        const root=PathUtils.join(env.LOCALAPPDATA,'OpenAI','Codex','bin');
+        try {
+          const entries=await Promise.all((await IOUtils.getChildren(root)).map(async dir=>({path:PathUtils.join(dir,'codex.exe'),time:(await IOUtils.stat(dir)).lastModified})));
+          entries.sort((a,b)=>b.time-a.time);candidates.push(...entries.map(entry=>entry.path));
+        }catch(_){}
+      }
       if (env.APPDATA) candidates.push(PathUtils.join(env.APPDATA,'npm','codex.cmd'));
       if (env.LOCALAPPDATA) candidates.push(PathUtils.join(env.LOCALAPPDATA,'Microsoft','WinGet','Links','codex.exe'));
     }
@@ -76,7 +84,7 @@ var CodexReaderHost = {
       // Drain, discard, and never persist stderr: it can include sensitive diagnostic content.
       this.readLoop(process.stderr,()=>{},null).catch(()=>{});
       process.wait().then(()=>rpc.close(),()=>rpc.close());
-      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.4.1'},capabilities:{experimentalApi:true}});
+      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.5.0'},capabilities:{experimentalApi:true}});
       await rpc.notify('initialized');
       this.version = init.userAgent || 'Codex';
       const account = await rpc.request('account/read',{refreshToken:false});
@@ -113,10 +121,14 @@ var CodexReaderHost = {
   getSession(key) {
     let session = this.sessions.get(key);
     const project=CodexReaderProjects.current(key),cwd=project?.path || this.cwd;
+    const projectIdentity=project?.id || project?.path || '';
+    const changed=session && (session.boundProjectId!==undefined ? session.boundProjectId!==projectIdentity || session.boundRoot!==cwd : session.cwd!==cwd);
     if(project?.missing)throw new Error('该项目已在 Codex 中移除，请重新选择项目。');
-    if(session?.busy && session.cwd!==cwd)throw new Error('项目目录已更改，请先停止当前回答。');
-    if (!session || session.rpc !== this.rpc || session.cwd!==cwd) {
+    if(session?.busy && changed)throw new Error('项目目录已更改，请先停止当前回答。');
+    if (!session || session.rpc !== this.rpc || changed) {
       session = new CodexReaderCore.Session(this.rpc,cwd,()=>this.emit());
+      session.projectId=project?.backendId || null;
+      session.boundProjectId=projectIdentity;session.boundRoot=cwd;
       this.sessions.set(key,session);
     }
     return session;
@@ -129,10 +141,65 @@ var CodexReaderHost = {
     }
     this.sessions.delete(key); this.emit();
   },
-  async listHistory() {
+  async projectMembership(project) {
+    if(!project)return new Set();
+    const home=await CodexReaderProjects.codexHome();
+    const state=JSON.parse(await IOUtils.readUTF8(PathUtils.join(home,'.codex-global-state.json')));
+    return new Set(Object.entries(state['thread-project-assignments'] || {}).filter(([,assignment])=>assignment.projectKind==='local' && assignment.projectId===project.id).map(([id])=>id));
+  },
+  async listHistory(key) {
     const rpc = await this.connect();
-    const result = await rpc.request('thread/list',{limit:40,sortKey:'updated_at'});
-    return result.data || [];
+    const project=key?CodexReaderProjects.current(key):null;
+    if(project?.missing)throw new Error('项目已移除，请重新选择。');
+    if(!project){const result=await rpc.request('thread/list',{limit:40,sortKey:'updated_at'});return result.data || [];}
+    const members=await this.projectMembership(project),found=new Map(),roots=project.roots || [project.path];
+    // Use exact project identity where available; directory matching supports older servers.
+    const filters=[...(project.backendId?[{projectId:project.backendId}]:[]),...roots.map(cwd=>({cwd}))];
+    for(const filter of filters){let cursor=null;
+      do {
+        const result=await rpc.request('thread/list',{limit:100,sortKey:'updated_at',cursor,...filter});
+        for(const thread of result.data || [])if(members.has(thread.id) || thread.projectId && (thread.projectId===project.backendId || thread.projectId===project.id) || !thread.projectId && thread.cwd && roots.some(root=>CodexReaderProjects.pathKey(root)===CodexReaderProjects.pathKey(thread.cwd)))found.set(thread.id,thread);
+        cursor=result.nextCursor;
+      }while(cursor && found.size<40);
+    }
+    for(const id of members)if(!found.has(id)){
+      try{const result=await rpc.request('thread/read',{threadId:id,includeTurns:false});if(result.thread)found.set(id,result.thread);}catch(_){}
+    }
+    return [...found.values()].sort((a,b)=>(b.updatedAt || 0)-(a.updatedAt || 0)).slice(0,40);
+  },
+  displayMessages(thread) {
+    const messages=[];
+    for(const turn of thread.turns || [])for(const item of turn.items || []){
+      if(item.type==='agentMessage')messages.push({role:'assistant',text:item.text || '',status:'completed'});
+      if(item.type==='userMessage'){
+        let text=(item.content || []).filter(x=>x.type==='text').map(x=>x.text).join('\n');
+        if(text.startsWith('User question:\n'))text=text.split('\nPaper title (untrusted metadata):')[0].slice('User question:\n'.length).trim();
+        messages.push({role:'user',text,context:''});
+      }
+    }
+    return messages;
+  },
+  async resumeHistory(key,threadId) {
+    if(this.sessions.get(key)?.busy)throw new Error('请先停止当前回答。');
+    const rpc=await this.connect(),result=await rpc.request('thread/resume',{threadId});
+    if(result.thread.status?.type==='active')throw new Error('这条会话正在 Codex 中生成，请完成后再继续。');
+    const session=new CodexReaderCore.Session(rpc,result.thread.cwd || CodexReaderProjects.current(key)?.path || this.cwd,()=>this.emit());
+    const project=CodexReaderProjects.current(key);
+    session.boundProjectId=project?.id || project?.path || '';session.boundRoot=project?.path || this.cwd;
+    session.threadId=result.thread.id;session.messages=this.displayMessages(result.thread);session.projectContextLoaded=true;
+    this.sessions.set(key,session);this.emit();return session;
+  },
+  async projectContext(key,session) {
+    if(session.threadId || session.projectContextLoaded || !CodexReaderProjects.current(key))return '';
+    const rpc=await this.connect(),threads=await this.listHistory(key);let context='';
+    for(const thread of threads.slice(0,4)){
+      let result;try{result=await rpc.request('thread/read',{threadId:thread.id,includeTurns:true});}catch(_){continue;}
+      const messages=this.displayMessages(result.thread).slice(-6);
+      const text=messages.map(m=>(m.role==='user'?'用户':'Codex')+'：'+m.text.slice(0,1800)).join('\n');
+      if(text)context+=`\n[项目历史：${thread.name || thread.preview?.slice(0,80) || thread.id}；会话 ${thread.id}]\n${text}\n`;
+      if(context.length>=16000)break;
+    }
+    return context.slice(0,16000);
   },
   async forkHistory(key,threadId) {
     if(CodexReaderProjects.current(key)?.missing)throw new Error('该项目已在 Codex 中移除，请重新选择项目。');

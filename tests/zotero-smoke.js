@@ -66,7 +66,7 @@ async function runZoteroSmoke(rootURI) {
     const projectFolder=PathUtils.join(PathUtils.parent(Zotero.Profile.dir),'test-results','shared-memory-fixture');
     await IOUtils.makeDirectory(projectFolder,{ignoreExisting:true});
     await IOUtils.writeUTF8(PathUtils.join(projectFolder,'AGENTS.md'),'Existing guidance\n');
-    codexScope.CodexReaderProjects.save({projects:[{name:'Fixture project',path:projectFolder}],bindings:{[view.key]:projectFolder}});
+    codexScope.CodexReaderProjects.save({projects:[{name:'Fixture project',path:projectFolder,source:'local'}],bindings:{[view.key]:projectFolder}});
     codexScope.CodexReaderUI.update(view);
     record('project list binds the paper to its folder',view.projectSelect.value===projectFolder);
     await codexScope.CodexReaderProjects.saveMemory(projectFolder,'Existing guidance\nShared research memory\n','Existing guidance\n');
@@ -80,8 +80,9 @@ async function runZoteroSmoke(rootURI) {
     record('desktop project registry automatically populates project picker',view.projectSelect.querySelector('option[value="sync-project"]')?.textContent==='Synced Codex project');
     record('existing paper folder binding migrates to stable Codex identity',view.projectSelect.value==='sync-project');
     await IOUtils.writeJSON(syncFile,{'local-projects':{'sync-project':{id:'sync-project',name:'Renamed Codex project',rootPaths:[projectFolder]}}});
-    await Zotero.Promise.delay(5500);
-    record('automatic polling detects Codex project rename without clicking import',view.projectSelect.selectedOptions[0]?.textContent==='Renamed Codex project');
+    const deadline=Date.now()+6000;
+    while(view.projectSelect.selectedOptions[0]?.textContent!=='Renamed Codex project' && Date.now()<deadline)await Zotero.Promise.delay(100);
+    record('native file notification detects rename without periodic registry reads',!!codexScope.CodexReaderProjects.watcher && view.projectSelect.selectedOptions[0]?.textContent==='Renamed Codex project');
     await IOUtils.writeJSON(syncFile,{'local-projects':{}});await codexScope.CodexReaderProjects.sync();
     record('removed bound project is visibly unavailable',view.projectSelect.selectedOptions[0]?.disabled && view.projectSelect.selectedOptions[0]?.textContent.includes('移除'));
     let removedBlocked=false;try{codexScope.CodexReaderHost.getSession(view.key);}catch(_){removedBlocked=true;}

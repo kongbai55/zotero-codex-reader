@@ -14,7 +14,7 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.4.1.xpi`.
+4. Select `dist/zotero-codex-reader-0.5.0.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
 6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
 
@@ -39,6 +39,15 @@ Automatic background updates are disabled for this plugin at startup. Manual upd
 
 ## Features
 
+### 0.5.0: File notifications, desktop registration and project conversations
+
+- Registry changes trigger refresh through native file notifications, with a brief debounce. There is no fixed five-second polling. The watcher uses an existing Node runtime (desktop-bundled or installed), starts only while a reader view exists, and exits when those views close. If unavailable, the list refreshes on opening it or returning to Zotero; sync status explains the fallback.
+- Creating/adding a project opens the official `codex://new?path=...&mode=codex` directory handoff. Codex owns registration and folder-access confirmation. No prompt is sent. A local project remains marked pending until the saved desktop registry confirms it; an existing project can be opened with the same button.
+- Legacy directories inferred from old conversation history are archived out of the dropdown. Real desktop project identities deduplicate the list; the earlier temporary verification entry is excluded.
+- Selecting a project automatically loads its local Codex conversation list, using exact project membership and directory filters. Clicking a conversation resumes the original thread with its stored context, rather than creating a branch.
+- New project conversations include bounded excerpts from up to four recent local project threads (at most 16,000 characters), explicitly marked as background evidence. This is separate from AGENTS.md guidance. Resuming an existing thread retains its own history without reinserting that background.
+- ChatGPT-backed AGENTS.md mirrors remain read-only. Cloud ChatGPT chats and account-level memories are not imported by this local CLI integration; view those in the desktop app.
+
 ### 0.4.1: Automatic Codex project sync
 
 Saved Codex local projects populate the picker automatically and refresh every five seconds, including renames, changed folders and removals.
@@ -53,7 +62,7 @@ Saved Codex local projects populate the picker automatically and refresh every f
 - Open **Projects and memory** in the drawer to create/add a local folder and automatically follow saved Codex local projects. Bind each paper to a project; new and branched chats use that folder.
 - Explicitly saved project memory lives in **AGENTS.md**. The editor loads the entire existing file and detects external edits before saving. Saving starts new plugin conversations for that project; saved Codex history remains available.
 
-**Project visibility (0.4.1):** saved Codex local projects synchronize automatically on startup and every five seconds. Names, primary/secondary folder paths and removals follow Codex without manual import or a model connection. Stable project identities preserve paper bindings across renames and directory changes. Removed bound projects are marked unavailable; sending requires another selection. Registry errors preserve the last good list and show a sync status. A custom CODEX_HOME can be set in connection settings. This compatibility reader only reads `.codex-global-state.json`; it does not rewrite desktop settings, read credentials or register plugin-created folders back into the desktop. Pure cloud/remote projects are outside this local sync. Shared AGENTS.md remains file-based guidance; start a new Codex chat to load updated guidance.
+**Current project behavior:** Codex → Zotero follows saved local projects when the registry changes. Zotero → Codex uses the official directory handoff and waits for desktop confirmation. The plugin never rewrites private desktop state or reads credential files. See the [official deep-link reference](https://learn.chatgpt.com/docs/reference/commands#deep-links).
 
 ### 0.3.0: Full Reading Panel
 
@@ -140,9 +149,9 @@ It does not copy or overwrite your Codex configuration.
 
 The plugin can retrieve existing Codex conversations through `thread/list`.
 
-Open the conversation list with the top-left sidebar button, click **Load Codex History**, then click a conversation to continue in a new branch.
+Open the conversation list with the top-left sidebar button, click **Load Codex History**, then click a conversation to continue the original thread.
 
-This creates a new conversational branch while preserving the original conversation.
+This resumes the original Codex thread. New messages belong to that same conversation.
 
 **Account limits**
 
@@ -153,10 +162,10 @@ Usage and rate-limit information can be displayed when provided by Codex's accou
 Codex Reader is not a fully synchronized replacement for Codex App.
 
 - It launches an independent `codex app-server` process rather than attaching to the currently running Codex App process.
-- Branching copies conversation context; subsequent messages are not synchronized bidirectionally with the original conversation.
+- The desktop UI may need a refresh to show messages written by another client; active threads cannot be continued concurrently.
 - App-specific UI features, temporary connectors, browser-host integrations, and approval interfaces may not be available to the independent app-server.
 - Shared conversation storage does not guarantee that newly created conversations immediately appear in Codex App's sidebar or that the App's live execution state is accessible.
-- The plugin reuses global Codex settings, but does not automatically inherit the working directory, project-level configuration, or `AGENTS.md` from your currently open Codex App project.
+- Select the same project to use its primary directory and project guidance; selecting a project does not import cloud account memory.
 - The history panel displays up to 40 recent conversations.
 - Single-conversation deletion requires a Codex server supporting `thread/delete`.
 

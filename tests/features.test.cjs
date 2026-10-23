@@ -22,8 +22,8 @@ test('numbered excerpts remain evidence and user comments stay outside the evide
   assert.throws(()=>promptFor({question:'q',annotations:[{text:'a',comment:'x'.repeat(MAX_CONTEXT)}]}));
 });
 
-function loadHost() {
-  const scope={CodexReaderProjects:{current:()=>({path:'D:\\shared-project'})},CodexReaderCore:require('../addon/content/core.js'),setTimeout,clearTimeout};vm.createContext(scope);
+function loadHost(projects={current:()=>({path:'D:\\shared-project'})}) {
+  const scope={CodexReaderProjects:projects,CodexReaderCore:require('../addon/content/core.js'),setTimeout,clearTimeout};vm.createContext(scope);
   vm.runInContext(fs.readFileSync(require.resolve('../addon/content/host.js'),'utf8'),scope);return scope.CodexReaderHost;
 }
 test('delete releases the selected thread, deletes only its ID and clears matching displays after success',async()=>{
@@ -32,6 +32,27 @@ test('delete releases the selected thread, deletes only its ID and clears matchi
   await host.deleteHistory('target');
   assert.deepEqual(calls.map(c=>[c.method,c.params.threadId]),[['thread/unload','target'],['thread/delete','target']]);
   assert.ok(!host.sessions.has('a'));assert.ok(host.sessions.has('b'));
+});
+test('project history filters out unrelated threads and includes explicit members',async()=>{
+  const project={id:'local-project',backendId:'backend',path:'D:/ACL',roots:['D:/ACL']};
+  const host=loadHost({current:()=>project,pathKey:p=>p.toLowerCase()});host.projectMembership=async()=>new Set(['member']);
+  host.rpc={closed:false,request:async method=>method==='thread/list'?{data:[{id:'same-root',cwd:'D:/ACL',updatedAt:2},{id:'wrong',cwd:'D:/Other'},{id:'native',projectId:'backend',updatedAt:3}]}:{thread:{id:'member',cwd:'D:/Moved',updatedAt:1}}};
+  const result=await host.listHistory('paper');assert.deepEqual(Array.from(result,x=>x.id),['native','same-root','member']);
+});
+test('continuing history resumes the same thread and preserves stored context rather than forking',async()=>{
+  const host=loadHost();const calls=[];host.rpc={closed:false,request:async(method,params)=>{calls.push({method,params});return {thread:{id:'original',cwd:'D:\\shared-project',turns:[{items:[{type:'userMessage',content:[{type:'text',text:'Previous question'}]},{type:'agentMessage',text:'Previous answer'}]}]}};}};
+  const session=await host.resumeHistory('paper','original');assert.equal(session.threadId,'original');assert.equal(session.messages.length,2);assert.deepEqual(calls.map(c=>c.method),['thread/resume']);
+});
+test('a resumed conversation in a project subdirectory stays selected on the next send',async()=>{
+  const p={id:'project',path:'D:/Shared'};const host=loadHost({current:()=>p});host.cwd='D:/Default';host.rpc={closed:false,request:async()=>({thread:{id:'original',cwd:'D:/Shared/subdir',turns:[]}})};
+  const resumed=await host.resumeHistory('paper','original');assert.equal(host.getSession('paper'),resumed);assert.equal(resumed.cwd,'D:/Shared/subdir');
+  p.path='D:/Moved';assert.notEqual(host.getSession('paper'),resumed);
+});
+test('new project chat receives bounded prior history as evidence, and resumed chats do not duplicate it',async()=>{
+  const host=loadHost();host.listHistory=async()=>[{id:'old',name:'Prior discussion'}];host.rpc={closed:false,request:async()=>({thread:{turns:[{items:[{type:'userMessage',content:[{type:'text',text:'A'.repeat(30000)}]},{type:'agentMessage',text:'Result'}]}]}})};
+  const context=await host.projectContext('paper',{});assert.ok(context.length<=16000);assert.match(context,/Prior discussion/);assert.match(context,/Result/);
+  assert.equal(await host.projectContext('paper',{threadId:'resumed'}),'');
+  assert.match(promptFor({question:'Follow up',projectContext:context}),/BEGIN UNTRUSTED PROJECT HISTORY/);
 });
 test('failed and busy deletions preserve local conversations',async()=>{
   const host=loadHost();let called=false;host.rpc={closed:false,request:async()=>{called=true;throw new Error('unsupported');}};

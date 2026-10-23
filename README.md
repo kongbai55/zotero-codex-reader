@@ -14,7 +14,7 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.3.0.xpi`.
+4. Select `dist/zotero-codex-reader-0.4.0.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
 6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin automatically attempts to locate Codex installed through npm.
 
@@ -39,6 +39,18 @@ Automatic background updates are disabled for this plugin at startup. Manual upd
 
 ## Features
 
+### 0.4.0: Annotations, formatted replies, reasoning and projects
+
+- Select a model and its advertised reasoning effort; unsupported levels disappear on model switches.
+- Markdown headings, emphasis, lists, tables, code blocks and LaTeX formulas render locally. Copying preserves the original Markdown.
+- **Enter** sends; **Shift+Enter** adds a newline. Input-method composition does not send.
+- Select PDF or assistant text and choose **Add to conversation**. Excerpts accumulate as numbered annotations with optional comments, editable chips and individual removal. Accepted messages retain their annotations; pending annotations clear on submission.
+- Delete one history conversation or the current conversation after confirmation. Codex `thread/delete` permanently deletes that thread and its descendants. Unsupported servers report an error and retain the local display.
+- Open **Projects and memory** in the drawer to create/add a local folder or import working directories from 40 recent Codex conversations. Bind each paper to a project; new and branched chats use that folder.
+- Explicitly saved project memory lives in **AGENTS.md**. The editor loads the entire existing file and detects external edits before saving. Saving starts new plugin conversations for that project; saved Codex history remains available.
+
+**Project visibility:** this release does not automatically synchronize the desktop project's sidebar registry. Add the same folder in Codex to display it there, then select/add it here. History import discovers working directories, not custom desktop project names or cloud-only projects. Shared AGENTS.md is file-based guidance, not ChatGPT account memory or automatic learning from every chat. Start a new Codex chat to load updated guidance. See [local projects](https://learn.chatgpt.com/docs/projects?surface=app) and [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
 ### 0.3.0: Full Reading Panel
 
 The Codex icon opens a full-height panel over Zotero's right content area, including its native header. Only chat content scrolls; the underlying item modules cannot receive focus while covered. The panel stays within the available width, leaving the icon rail accessible. Click another module icon or **×** to return to Zotero. Each paper retains its own conversation and draft.
@@ -55,13 +67,13 @@ A collapsible conversation list, uncluttered message area, and rounded composer 
 
 **Selected-text context**
 
-Select text in a PDF and choose **Add to Codex Context** from the popup menu.
+Select text in a PDF and choose **Add to conversation** from the popup menu.
 
 The selected text is added to your local context draft. No request is sent at this stage.
 
 **Editable paper context**
 
-Click **Paper Context (+)** beside the composer to inspect, edit, or remove content before sending it to Codex.
+Click the annotation count or **Add context (+)** beside the composer to inspect, edit, or remove content before sending it to Codex.
 
 **PDF text extraction**
 
@@ -74,7 +86,7 @@ Click **Extract First 20 Pages** to extract text using Zotero's local PDF extrac
 
 **Interactive conversations**
 
-Enter a question and click **Send**, or press **Ctrl+Enter**, to receive streamed responses from Codex.
+Enter a question and click **Send**, or press **Enter** (use **Shift+Enter** for a newline), to receive streamed responses from Codex.
 
 The **Summarize**, **Explain**, and **Translate** shortcuts populate the question editor without automatically submitting a request.
 
@@ -142,7 +154,7 @@ Codex Reader is not a fully synchronized replacement for Codex App.
 - Shared conversation storage does not guarantee that newly created conversations immediately appear in Codex App's sidebar or that the App's live execution state is accessible.
 - The plugin reuses global Codex settings, but does not automatically inherit the working directory, project-level configuration, or `AGENTS.md` from your currently open Codex App project.
 - The history panel displays up to 40 recent conversations.
-- Deleting Codex conversation history is not supported in the current version.
+- Single-conversation deletion requires a Codex server supporting `thread/delete`.
 
 If Zotero and Codex App use different accounts, operating-system users, or `CODEX_HOME` locations, they will not automatically share authentication or conversation data.
 
@@ -156,7 +168,7 @@ The plugin contains:
 
 - No advertising or developer-operated telemetry
 - No developer-hosted backend
-- No remote JavaScript or third-party JavaScript dependencies
+- No remote JavaScript; bundled Marked 17.0.5 and KaTeX 0.16.22 run locally under MIT licenses
 - No automatic update downloads
 - No additional HTTP listening service
 
@@ -182,7 +194,7 @@ The official authentication page is opened only when you explicitly click **Offi
 
 ### Local Data Storage
 
-The plugin stores only the configured executable path in its own settings.
+The plugin stores the executable path, project folders and paper-to-project bindings in its settings. Shared guidance is written to the selected folder's AGENTS.md only when you click Save shared memory.
 
 Conversation displays and unsent drafts remain in Zotero process memory and are not restored after Zotero closes.
 
@@ -209,7 +221,7 @@ Consequently:
 
 Extracted paper text and model responses are treated as untrusted content.
 
-Responses are rendered using `textContent`, rather than executed as HTML. Remote images embedded in model responses are not loaded.
+Markdown tokens are rendered through a fixed set of DOM elements. Raw HTML remains inert text, unsafe link schemes are rejected, and remote images are not loaded. Formula markup comes from bundled KaTeX with trust disabled and bounded expansion.
 
 New and branched conversations use a read-only sandbox with approval on demand, without changing your global Codex configuration.
 
@@ -317,7 +329,7 @@ These tests use a generated sample PDF to verify:
 - Plugin loading in Zotero
 - PDF text extraction
 - Selected-text handling
-- Plain-text response rendering
+- Markdown/formula rendering, annotations and reasoning option discovery
 - Local communication with Codex
 
 Test scripts are not included in the distributed plugin package.

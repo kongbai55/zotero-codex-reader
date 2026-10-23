@@ -1,0 +1,68 @@
+// Optional UI regression: PLAYWRIGHT_MODULE may point to a bundled installation.
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert=require('node:assert/strict');
+const {pathToFileURL}=require('node:url');
+const path=require('node:path');
+const fs=require('node:fs');
+(async()=>{
+  const browser=await chromium.launch({channel:'msedge',headless:true});
+  const page=await browser.newPage({viewport:{width:1100,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const checks=[];const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
+  try {
+    await page.goto(pathToFileURL(path.resolve('test-results/ui/index.html')).href);await page.waitForSelector('.cr-root');
+    check('initial render without runtime errors',!errors.length);
+    await page.selectOption('[aria-label="模型"]','demo-model');
+    check('model effort default',await page.locator('[aria-label="推理强度"]').inputValue()==='medium');
+    await page.selectOption('[aria-label="推理强度"]','high');await page.selectOption('[aria-label="模型"]','other');
+    check('model switch discards unsupported effort',await page.locator('[aria-label="推理强度"]').inputValue()==='low');
+    const rich='## 推理与曲线\n\n**二次 Bézier** 只能向一侧弯曲。\n\n$$p(s)=p_0+sl t_{\\alpha}+2s(1-s)b n_{\\alpha}$$\n\n| 表示方法 | 特点 |\n|---|---|\n| 三次 Bézier | 可形成 S 形 |\n\n1. 比较控制点。\n2. 保持连续性。\n\n```python\nprint("曲线")\n```\n\n<script>bad()</script>\n\n![tracker](https://example.invalid/a)\n\n[unsafe](javascript:alert(1))';
+    await page.evaluate(text=>{CodexReaderHost.sessions.set('2',{messages:[{role:'assistant',text,status:'completed'}]});CodexReaderHost.emit();},rich);
+    check('heading, table, list, code and MathML',await page.locator('.cr-log h2').count()===1 && await page.locator('.cr-log table').count()===1 && await page.locator('.cr-log ol').count()===1 && await page.locator('.cr-log pre code').count()===1 && await page.locator('.cr-log math').count()===1);
+    check('raw HTML, images, scripts and unsafe links remain inert',await page.locator('.cr-log script,.cr-log img,.cr-log a[href^="javascript:"]').count()===0);
+    await page.evaluate(()=>{
+      const node=document.querySelector('.cr-log .cr-markdown strong').nextSibling;const range=document.createRange();range.setStart(node,0);range.setEnd(node,node.length);
+      const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.querySelector('.cr-log').dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+    });
+    await page.locator('.cr-selection-add').click();await page.locator('[aria-label="注释评论"]').fill('为什么只能向一侧弯曲？');
+    await page.locator('.cr-note-save').click();
+    check('selection produces numbered mark and composer chip',await page.locator('.cr-annotation-pin').count()===1 && await page.locator('.cr-annotation-chip').count()===1);
+    await page.locator('.cr-annotation-chip').click();
+    check('comment can be reopened',await page.locator('[aria-label="注释 1 的评论"]').inputValue()==='为什么只能向一侧弯曲？');
+    await page.locator('[aria-label="移除注释 1"]').click();
+    check('individual annotation removal',await page.locator('.cr-annotation-chip').count()===0 && await page.locator('.cr-annotation-pin').count()===0);
+    await page.locator('[aria-label="关闭上下文预览"]').click();
+    await page.locator('[aria-label="问题"]').fill('第一行');await page.locator('[aria-label="问题"]').press('Shift+Enter');
+    check('Shift+Enter inserts newline',await page.locator('[aria-label="问题"]').inputValue()==='第一行\n');
+    await page.locator('[aria-label="问题"]').dispatchEvent('keydown',{key:'Enter',isComposing:true});
+    check('IME confirmation does not submit',await page.locator('[aria-label="问题"]').inputValue()==='第一行\n');
+    await page.locator('[aria-label="问题"]').press('Enter');await page.waitForFunction(()=>document.querySelector('[aria-label="问题"]').value==='');
+    check('Enter submits message',await page.locator('.cr-user').innerText()==='你\n第一行' || (await page.locator('.cr-user').innerText()).includes('第一行'));
+    await page.locator('[aria-label="展开会话列表"]').click();await page.locator('.cr-history-load').click();
+    await page.evaluate(()=>window.allowDelete=false);await page.locator('.cr-history-delete').first().click();
+    check('delete cancellation preserves history row',await page.locator('.cr-history-row').count()===3);
+    await page.evaluate(()=>window.allowDelete=true);await page.locator('.cr-history-delete').first().click();
+    check('confirmed deletion targets selected history ID',await page.evaluate(()=>window.deletedThread)==='one' && await page.locator('.cr-history-row').count()===2);
+    await page.evaluate(()=>{
+      window.memoryText='Existing guidance\n';
+      window.IOUtils={exists:async()=>true,readUTF8:async()=>window.memoryText,writeUTF8:async(p,text)=>{window.memoryText=text;}};
+      window.PathUtils={join:(...parts)=>parts.join('/')};
+      CodexReaderProjects.choose=async()=>{const p={name:'研究项目',path:'D:/fixture-project'},data=CodexReaderProjects.load();data.projects.push(p);CodexReaderProjects.save(data);return p;};
+    });
+    await page.locator('.cr-project-manage').click();await page.getByRole('button',{name:'创建项目',exact:true}).click();
+    check('created project appears and binds to paper',await page.locator('[aria-label="当前论文所属项目"]').inputValue()==='D:/fixture-project');
+    await page.locator('[aria-label="项目共享记忆"]').fill('Existing guidance\nProject memory');await page.getByRole('button',{name:'保存共享记忆',exact:true}).click();
+    check('project memory saves existing guidance and new notes',await page.evaluate(()=>window.memoryText)==='Existing guidance\nProject memory');
+    await page.locator('[aria-label="项目共享记忆"]').fill('Local edit');await page.evaluate(()=>window.memoryText='External edit');await page.getByRole('button',{name:'保存共享记忆',exact:true}).click();
+    check('external edits are protected and error is visible',await page.evaluate(()=>window.memoryText)==='External edit' && await page.locator('.cr-projects .cr-panel-error').isVisible());
+    await page.locator('.cr-projects .cr-panel-close').click();
+    await page.locator('[aria-label="展开会话列表"]').click();
+    await page.locator('.cr-nav [aria-label="收起会话列表"]').click();
+    await page.evaluate(text=>{CodexReaderHost.sessions.set('2',{messages:[{role:'assistant',text,status:'completed'}]});CodexReaderHost.emit();},rich.split('\n\n<script>')[0]);
+    await page.screenshot({path:'test-results/features-wide.png'});
+    await page.locator('#narrow').click();
+    check('320px composer remains inside panel',await page.evaluate(()=>{const a=view.root.getBoundingClientRect(),b=view.send.getBoundingClientRect();return b.right<=a.right && view.root.scrollWidth<=view.root.clientWidth+1;}));
+    await page.screenshot({path:'test-results/features-narrow.png'});
+    check('no uncaught UI errors',!errors.length);
+    fs.writeFileSync('test-results/feature-ui.json',JSON.stringify({success:true,checks},null,2));console.log(JSON.stringify({success:true,checks},null,2));
+  } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

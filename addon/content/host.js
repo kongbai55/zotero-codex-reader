@@ -1,6 +1,6 @@
 /* Mozilla host adapter. Connects only to a local executable through stdio. */
 var CodexReaderHost = {
-  process:null, rpc:null, starting:null, sessions:new Map(), listeners:new Set(),
+  process:null, rpc:null, starting:null, sessions:new Map(), listeners:new Set(), deleting:new Set(),
   status:'尚未连接', models:[], accountReady:false, rootURI:'', generation:0,
   timer:{set:(fn,ms)=>setTimeout(fn,ms), clear:id=>clearTimeout(id)},
   emit() { for (const listener of this.listeners) { try { listener(); } catch (_) {} } },
@@ -53,6 +53,10 @@ var CodexReaderHost = {
       const rpc = new CodexReaderCore.Rpc({
         write:line=>process.stdin.write(line), timer:this.timer,
         onNotification:(method,params)=>{
+          if(method==='thread/deleted') {
+            for(const [key,session] of this.sessions)if(session.threadId===params.threadId)this.sessions.delete(key);
+            this.emit();
+          }
           for (const session of this.sessions.values()) session.event(method,params);
           if (method === 'account/login/completed') {
             this.status = params.success ? '登录成功，请重新连接以刷新模型。' : '登录未完成。'; this.emit();
@@ -72,7 +76,7 @@ var CodexReaderHost = {
       // Drain, discard, and never persist stderr: it can include sensitive diagnostic content.
       this.readLoop(process.stderr,()=>{},null).catch(()=>{});
       process.wait().then(()=>rpc.close(),()=>rpc.close());
-      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.3.0'},capabilities:{experimentalApi:true}});
+      const init = await rpc.request('initialize',{clientInfo:{name:'zotero_codex_reader',title:'Codex Reader for Zotero',version:'0.4.0'},capabilities:{experimentalApi:true}});
       await rpc.notify('initialized');
       this.version = init.userAgent || 'Codex';
       const account = await rpc.request('account/read',{refreshToken:false});
@@ -109,7 +113,7 @@ var CodexReaderHost = {
   getSession(key) {
     let session = this.sessions.get(key);
     if (!session || session.rpc !== this.rpc) {
-      session = new CodexReaderCore.Session(this.rpc,this.cwd,()=>this.emit());
+      session = new CodexReaderCore.Session(this.rpc,CodexReaderProjects.current(key)?.path || this.cwd,()=>this.emit());
       this.sessions.set(key,session);
     }
     return session;
@@ -128,10 +132,12 @@ var CodexReaderHost = {
     return result.data || [];
   },
   async forkHistory(key,threadId) {
+    if(this.deleting.has(threadId))throw new Error('该会话正在删除。');
     if (this.sessions.get(key)?.busy) throw new Error('请先停止当前回答。');
     const rpc = await this.connect();
-    const result = await rpc.request('thread/fork',{threadId,ephemeral:false,excludeTurns:false,cwd:this.cwd,approvalPolicy:'on-request',sandbox:'read-only',developerInstructions:CodexReaderCore.INSTRUCTIONS});
-    const session = new CodexReaderCore.Session(rpc,this.cwd,()=>this.emit());
+    const cwd=CodexReaderProjects.current(key)?.path || this.cwd;
+    const result = await rpc.request('thread/fork',{threadId,ephemeral:false,excludeTurns:false,cwd,approvalPolicy:'on-request',sandbox:'read-only',developerInstructions:CodexReaderCore.INSTRUCTIONS});
+    const session = new CodexReaderCore.Session(rpc,cwd,()=>this.emit());
     session.threadId = result.thread.id;
     // Include only plain user/assistant text in the UI; never render tool output or HTML.
     for (const turn of (result.thread.turns || [])) for (const item of (turn.items || [])) {
@@ -139,6 +145,19 @@ var CodexReaderHost = {
       if (item.type === 'userMessage') session.messages.push({role:'user',text:(item.content || []).filter(x=>x.type==='text').map(x=>x.text).join('\n'),context:''});
     }
     this.sessions.set(key,session); this.emit(); return session;
+  },
+  async deleteHistory(threadId) {
+    if(this.deleting.has(threadId))throw new Error('该会话正在删除。');
+    if([...this.sessions.values()].some(s=>s.threadId===threadId && s.busy))throw new Error('请先停止该会话的回答，再删除。');
+    this.deleting.add(threadId);
+    try {
+      const rpc=await this.connect();
+      // Release this client's writer before requesting a permanent local delete.
+      if([...this.sessions.values()].some(s=>s.threadId===threadId))await rpc.request('thread/unload',{threadId},10000);
+      await rpc.request('thread/delete',{threadId});
+      for(const [key,session] of this.sessions)if(session.threadId===threadId)this.sessions.delete(key);
+      this.emit();
+    } finally {this.deleting.delete(threadId);}
   },
   async handleRequest(method,params) {
     const win = Zotero.getMainWindow();

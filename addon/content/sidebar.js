@@ -10,12 +10,15 @@ var CodexReaderUI = {
     if (text !== undefined) node.textContent = text;
     return node;
   },
-  protectCommentEditor(editor) {
+  protectCommentEditor(editor,hostWindow) {
     editor.setAttribute('data-codex-comment-editor','true');
-    const win=editor.ownerDocument.defaultView,root=win.windowRoot || win;
+    // Reader callbacks expose an unwrapped content document. Resolve the chrome
+    // root through the reader host, before its window capture shortcut handlers.
+    const win=hostWindow || editor.ownerDocument.defaultView,root=win.windowRoot || win;
     if(this.editorGuards.has(root))return;
     const listener=event=>{
-      if(!event.target?.closest?.('[data-codex-comment-editor]') || ['Escape','Tab'].includes(event.key))return;
+      const target=event.originalTarget || event.target;
+      if(!target?.closest?.('[data-codex-comment-editor]') || ['Escape','Tab'].includes(event.key))return;
       // Zotero's reader captures keys on its window before textarea handlers.
       // The chrome window root runs first. Keep native editing, cut/copy/paste
       // and IME defaults, but do not let reader shortcuts consume these keys.
@@ -41,7 +44,7 @@ var CodexReaderUI = {
       if (!text) return;
       const popup=this.h(event.doc,'div',{className:'cr-selection-context'});
       const comment=this.h(event.doc,'textarea',{rows:2,placeholder:'添加可选评论…','aria-label':'选文评论'});
-      this.protectCommentEditor(comment);
+      this.protectCommentEditor(comment,event.reader._window);
       popup.setAttribute('data-tabstop','1');
       const button = this.h(event.doc,'button',{type:'button'},'添加到对话');
       popup.append(comment,button);

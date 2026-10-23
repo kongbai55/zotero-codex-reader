@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Codex Reader · 论文助手",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "在 Zotero 阅读侧栏通过本机 Codex CLI 对话。无第三方中转、无插件遥测。",
   "author": "Dinglong Lu",
   "applications": {

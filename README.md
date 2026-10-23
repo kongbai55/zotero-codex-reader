@@ -14,7 +14,7 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.6.1.xpi`.
+4. Select `dist/zotero-codex-reader-0.6.2.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
 6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin prefers the desktop-bundled Codex executable, then looks for a separately installed CLI.
 
@@ -38,6 +38,11 @@ The tested Zotero version requires an HTTPS `update_url`, so the plugin uses the
 Automatic background updates are disabled for this plugin at startup. Manual update checks will fail. No developer-hosted update service is contacted or required.
 
 ## Features
+
+### 0.6.2: PDF comment keyboard fix
+
+- Fix reader shortcuts still intercepting deletion and arrow keys in the first PDF excerpt comment opened after startup. Keyboard protection now uses the reader's host window directly, without relying on a previously opened reply comment editor.
+- Regression checks use the real selection popup and verify Backspace, Delete, all four arrow keys, selected-text deletion and the comment saved when adding an excerpt to the conversation.
 
 ### 0.6.1: Comment editing, reply selection and drag-and-drop fixes
 

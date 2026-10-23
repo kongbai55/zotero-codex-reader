@@ -71,10 +71,17 @@ async function runZoteroSmoke() {
     const prompt=codexScope.CodexReaderCore.promptFor({question:'Follow up',annotations:view.annotations});record('reply excerpt and comment reach follow-up prompt',prompt.includes('Selectable reply') && prompt.includes('解释这里的原因'));
     view.annotations=[];ui.renderAnnotations(view);ui.saveDraft(view);
     await stage('checking real PDF popup editing');
+    // Exercise a PDF popup as the first protected editor, as on a fresh startup.
+    // A guard previously installed from a chrome reply editor can mask a wrong
+    // event root obtained from the reader's unwrapped content document.
+    for(const [root,listener] of ui.editorGuards){for(const type of ['keydown','keypress','keyup'])root.removeEventListener(type,listener,true);}
+    ui.editorGuards.clear();
     const readerWin=reader._iframeWindow,readerDoc=readerWin.document,internal=reader._internalReader;
-    const pdfPopup=readerDoc.createElement('div');readerDoc.body.append(pdfPopup);
-    ui.selectionHandler({doc:readerDoc,reader,params:{annotation:{text:'Fixture selected PDF text',pageLabel:'1'}},append:element=>pdfPopup.append(element)});
-    const pdfComment=pdfPopup.querySelector('[aria-label="选文评论"]');record('PDF popup callback creates editor in native reader document',!!pdfComment);
+    internal._updateState(Components.utils.cloneInto({primaryViewSelectionPopup:{rect:[50,80,250,100],annotation:{text:'Fixture selected PDF text',pageLabel:'1',position:{pageIndex:0,rects:[[40,740,300,760]]}}}},readerWin));
+    await Zotero.Promise.delay(500);
+    const pdfPopup=readerDoc.querySelector('.selection-popup');
+    diagnostics.popup=pdfPopup?.outerHTML;
+    const pdfComment=pdfPopup?.querySelector('[aria-label="选文评论"]');record('native React selection popup invokes production editor callback',!!pdfComment);
     pdfComment.value='更正错误误';pdfComment.focus();
     let leaked=0;const probe=event=>{if(event.target===pdfComment)leaked++;};readerWin.addEventListener('keydown',probe,true);
     const key=new readerWin.KeyboardEvent('keydown',{key:'Backspace',code:'Backspace',keyCode:8,bubbles:true,cancelable:true});pdfComment.dispatchEvent(key);
@@ -82,11 +89,31 @@ async function runZoteroSmoke() {
     record('chrome root protects PDF comment before reader capture shortcuts',leaked===0 && !key.defaultPrevented && pdfComment.isConnected);
     // Native engine keyboard input tests actual editing, without touching OS clipboard.
     const tip=Components.classes['@mozilla.org/text-input-processor;1'].createInstance(Components.interfaces.nsITextInputProcessor);
-    record('native editor keyboard test transaction starts',tip.beginInputTransactionForTests(readerWin));
+    record('native editor keyboard test transaction starts',tip.beginInputTransactionForTests(win));
     pdfComment.setSelectionRange(pdfComment.value.length,pdfComment.value.length);
     tip.keydown(new readerWin.KeyboardEvent('keydown',{key:'Backspace',code:'Backspace',keyCode:8}));tip.keyup(new readerWin.KeyboardEvent('keyup',{key:'Backspace',code:'Backspace',keyCode:8}));
     record('native Backspace deletes comment text without closing PDF popup',pdfComment.value==='更正错误' && pdfComment.isConnected);
-    pdfPopup.remove();
+    const press=(key,code=key,keyCode=0)=>{
+      tip.keydown(new win.KeyboardEvent('keydown',{key,code,keyCode}));
+      tip.keyup(new win.KeyboardEvent('keyup',{key,code,keyCode}));
+    };
+    press('ArrowLeft','ArrowLeft',37);
+    diagnostics.arrow={value:pdfComment.value,start:pdfComment.selectionStart,end:pdfComment.selectionEnd,active:readerDoc.activeElement?.outerHTML};
+    record('native ArrowLeft moves PDF comment caret',pdfComment.selectionStart===3 && pdfComment.selectionEnd===3 && readerDoc.activeElement===pdfComment);
+    press('Delete','Delete',46);
+    record('native Delete edits PDF comment',pdfComment.value==='更正错');
+    pdfComment.setSelectionRange(1,1);press('ArrowRight','ArrowRight',39);
+    record('native ArrowRight moves PDF comment caret',pdfComment.selectionStart===2 && pdfComment.selectionEnd===2);
+    pdfComment.setSelectionRange(0,pdfComment.value.length);press('Backspace','Backspace',8);
+    record('native selected deletion clears PDF comment without closing popup',pdfComment.value==='' && pdfComment.isConnected);
+    pdfComment.value='ABCDE\nFGHIJ';pdfComment.setSelectionRange(3,3);press('ArrowDown','ArrowDown',40);
+    record('native ArrowDown moves between comment lines',pdfComment.selectionStart===9 && pdfComment.selectionEnd===9);
+    press('ArrowUp','ArrowUp',38);
+    record('native ArrowUp moves between comment lines',pdfComment.selectionStart===3 && pdfComment.selectionEnd===3);
+    pdfComment.value='解释选文';pdfPopup.querySelector('.cr-selection-context button').click();
+    record('edited PDF comment reaches the pending annotation',view.annotations[0]?.comment==='解释选文' && view.annotations[0]?.text==='Fixture selected PDF text');
+    view.annotations=[];ui.renderAnnotations(view);ui.saveDraft(view);
+    internal._updateState({primaryViewSelectionPopup:null});
     await stage('checking native PDF drag capture');
     const transfer=new win.DataTransfer();transfer.items.add(new win.File([await IOUtils.read(PathUtils.join(root,'test-results','fixture.pdf'))],'drop-fixture.pdf',{type:'application/pdf'}));
     const selectedTab=win.Zotero_Tabs.selectedID;

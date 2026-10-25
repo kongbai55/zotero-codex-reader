@@ -6,15 +6,39 @@ const path=require('node:path').posix;
 const {randomUUID}=require('node:crypto');
 const {Session,promptFor}=require('../addon/content/core.js');
 const win={TextDecoder};
-function fixture(){
+function fixture({profileDir='/profile',pathAPI=path,maxPath=Infinity}={}){
   const files=new Map(),removed=[];
-  const scope={Uint8Array,Services:{uuid:{generateUUID:randomUUID}},Zotero:{Profile:{dir:'/profile'}},PathUtils:{join:path.join,parent:path.dirname,filename:path.basename},IOUtils:{
-    makeDirectory:async()=>{},write:async(p,b)=>files.set(p,b),remove:async p=>removed.push(p),stat:async()=>({type:'regular',size:3}),read:async()=>new Uint8Array([65,66,67])
+  const scope={Uint8Array,Services:{uuid:{generateUUID:randomUUID}},Zotero:{Profile:{dir:profileDir}},PathUtils:{join:pathAPI.join,parent:pathAPI.dirname,filename:pathAPI.basename},IOUtils:{
+    makeDirectory:async()=>{},write:async(p,b)=>{if(p.length>=maxPath)throw new Error('NS_ERROR_FILE_NOT_FOUND');files.set(p,b);},remove:async p=>removed.push(p),stat:async()=>({type:'regular',size:3}),read:async()=>new Uint8Array([65,66,67])
   }};
   vm.createContext(scope);vm.runInContext(fs.readFileSync('addon/content/attachments.js','utf8'),scope);
   return {api:scope.CodexReaderAttachments,files,removed};
 }
 const file=(name,text)=>({name,size:Buffer.byteLength(text),arrayBuffer:async()=>new TextEncoder().encode(text).buffer});
+test('long Windows PDF names use short copies while preserving names, bytes and distinct attachments',async()=>{
+  const pathAPI=require('node:path').win32;
+  const profileDir='C:\\Users\\ludin\\AppData\\Roaming\\Zotero\\Zotero\\Profiles\\03bu1ej5.default';
+  const {api,files,removed}=fixture({profileDir,pathAPI,maxPath:260});
+  const name='Tsujimura 等 - 2026 - Assessing the Belief Consistency of Large Language Models on the Logical Conversation Process.pdf';
+  assert.equal(pathAPI.join(profileDir,'codex-reader-workspace','attachments',randomUUID(),name).length,261);
+  const first=await api.import(file(name,'%PDF-fixture'),win);
+  const second=await api.import(file(name,'%PDF-second'),win);
+  assert.equal(first.name,name);assert.equal(second.name,name);
+  assert.notEqual(first.path,second.path);assert.ok(first.path.length<=240);
+  assert.equal(pathAPI.basename(first.path),'file.pdf');
+  assert.equal(new TextDecoder().decode(files.get(first.path)),'%PDF-fixture');
+  await api.discard(first);assert.deepEqual(removed,[pathAPI.dirname(first.path)]);
+  const unicodeName='长标题😀'.repeat(60)+'.md';
+  const text=await api.import(file(unicodeName,'完整内容'),win);
+  assert.equal(text.name,unicodeName);assert.equal(text.text,'完整内容');
+  assert.ok(text.path.endsWith('\\file.md'));
+});
+
+test('overlong profile paths fail clearly before writing a copy',async()=>{
+  const {api,files,removed}=fixture({profileDir:'/profile/'+ 'x'.repeat(220),maxPath:260});
+  await assert.rejects(api.import(file('paper.pdf','%PDF'),win),/附件保存路径过长/);
+  assert.equal(files.size,0);assert.equal(removed.length,0);
+});
 test('imports independent copies, decodes text and never treats HTML or SVG as image previews',async()=>{
   const {api,files}=fixture();
   const a=await api.import(file('../unsafe.html','<script>alert(1)</script>'),win);

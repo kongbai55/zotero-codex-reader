@@ -14,7 +14,7 @@ It reuses your existing Codex authentication, models, configuration, and service
 1. Make sure Codex CLI is installed, authenticated, and working in your terminal.
 2. In Zotero, open **Tools → Plugins / Add-ons**.
 3. Click the gear icon and select **Install Plugin From File**.
-4. Select `dist/zotero-codex-reader-0.6.2.xpi`.
+4. Select `dist/zotero-codex-reader-0.6.3.xpi`.
 5. Open a PDF in Zotero and click the green code icon. Codex fills the right content pane.
 6. Open **Settings (⋯)** and click **Connect to Codex**. The plugin prefers the desktop-bundled Codex executable, then looks for a separately installed CLI.
 
@@ -38,6 +38,11 @@ The tested Zotero version requires an HTTPS `update_url`, so the plugin uses the
 Automatic background updates are disabled for this plugin at startup. Manual update checks will fail. No developer-hosted update service is contacted or required.
 
 ## Features
+
+### 0.6.3: Long attachment filename fix
+
+- Store attachment copies under short names such as `file.pdf`, preserving the original display name and format extension. Unique directories keep same-name attachments separate.
+- Check the complete destination path before writing, with a clear error for excessively long Zotero profile paths. Long paper titles no longer consume the Windows path budget.
 
 ### 0.6.2: PDF comment keyboard fix
 

@@ -1,9 +1,9 @@
 /* User-selected attachments only. Copies live in the plugin workspace, never in the library. */
 var CodexReaderAttachments = {
-  MAX_FILES:10, MAX_FILE:20*1024*1024, MAX_TOTAL:50*1024*1024, MAX_TEXT:60000,
+  MAX_FILES:10, MAX_FILE:20*1024*1024, MAX_TOTAL:50*1024*1024, MAX_TEXT:60000, MAX_PATH:240,
   textExtensions:new Set('txt md markdown csv tsv json jsonl yaml yml xml html htm css js jsx ts tsx py r jl c cpp h hpp java rs go sh ps1 tex bib ris log ini toml sql svg'.split(' ')),
   safeName(name) {
-    const clean=String(name || 'attachment').split(/[\\/]/).pop().replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/,'').slice(-160) || 'attachment';
+    const clean=String(name || 'attachment').split(/[\\/]/).pop().replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').replace(/[. ]+$/,'') || 'attachment';
     return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(clean)?'_'+clean:clean;
   },
   imageType(bytes) {
@@ -56,8 +56,12 @@ var CodexReaderAttachments = {
     if(existing.reduce((sum,a)=>sum+a.size,0)+bytes.length>this.MAX_TOTAL)throw new Error('每条消息附件总大小不能超过 50 MB。');
     const name=this.safeName(file.name),mime=this.imageType(bytes),id=Services.uuid.generateUUID().toString().replace(/[{}]/g,'');
     const directory=PathUtils.join(Zotero.Profile.dir,'codex-reader-workspace','attachments',id);
+    // UUID directories keep copies distinct; display names need not be disk names.
+    // Leave room below Windows MAX_PATH, including IOUtils' temporary suffixes.
+    const extension=/\.[^.]{1,16}$/u.exec(name)?.[0] || '';
+    const path=PathUtils.join(directory,'file'+extension);
+    if(path.length>this.MAX_PATH)throw new Error('附件保存路径过长，请将 Zotero 配置目录移到更短的路径后重试。');
     await IOUtils.makeDirectory(directory,{ignoreExisting:false});
-    const path=PathUtils.join(directory,name);
     try {
       await IOUtils.write(path,bytes,{noOverwrite:true});
       let text='',truncated=false;

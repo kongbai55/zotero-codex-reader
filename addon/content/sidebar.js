@@ -1,5 +1,5 @@
 var CodexReaderUI = {
-  views:new Map(), drafts:new Map(), editorGuards:new Map(), selectionHandler:null, paneID:null, rootURI:'',
+  views:new Map(), drafts:new Map(), editorGuards:new Map(), commentEditors:new WeakMap(), selectionHandler:null, paneID:null, rootURI:'',
   h(doc,tag,props = {},text) {
     const node = doc.createElementNS('http://www.w3.org/1999/xhtml',tag);
     for (const [key,value] of Object.entries(props)) {
@@ -10,19 +10,29 @@ var CodexReaderUI = {
     if (text !== undefined) node.textContent = text;
     return node;
   },
-  protectCommentEditor(editor,hostWindow) {
+  protectCommentEditor(editor,hostWindow,onConfirm) {
     editor.setAttribute('data-codex-comment-editor','true');
+    const state={onConfirm,composing:false};
+    this.commentEditors.set(editor.wrappedJSObject || editor,state);
+    editor.addEventListener('compositionstart',()=>{state.composing=true;});
+    editor.addEventListener('compositionend',()=>{state.composing=false;});
     // Reader callbacks expose an unwrapped content document. Resolve the chrome
     // root through the reader host, before its window capture shortcut handlers.
     const win=hostWindow || editor.ownerDocument.defaultView,root=win.windowRoot || win;
     if(this.editorGuards.has(root))return;
     const listener=event=>{
       const target=event.originalTarget || event.target;
-      if(!target?.closest?.('[data-codex-comment-editor]') || ['Escape','Tab'].includes(event.key))return;
+      const editor=target?.closest?.('[data-codex-comment-editor]');
+      if(!editor || ['Escape','Tab'].includes(event.key))return;
       // Zotero's reader captures keys on its window before textarea handlers.
       // The chrome window root runs first. Keep native editing, cut/copy/paste
       // and IME defaults, but do not let reader shortcuts consume these keys.
       event.stopImmediatePropagation();
+      const state=this.commentEditors.get(editor.wrappedJSObject || editor);
+      if(event.type==='keydown' && event.key==='Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing && !state?.composing && event.keyCode!==229 && state?.onConfirm){
+        event.preventDefault();
+        if(!event.repeat)state.onConfirm();
+      }
     };
     for(const type of ['keydown','keypress','keyup'])root.addEventListener(type,listener,true);
     this.editorGuards.set(root,listener);
@@ -43,12 +53,13 @@ var CodexReaderUI = {
       const text = event.params.annotation?.text;
       if (!text) return;
       const popup=this.h(event.doc,'div',{className:'cr-selection-context'});
-      const comment=this.h(event.doc,'textarea',{rows:2,placeholder:'添加可选评论…','aria-label':'选文评论'});
-      this.protectCommentEditor(comment,event.reader._window);
+      const comment=this.h(event.doc,'textarea',{rows:2,placeholder:'添加可选评论…（Enter 添加，Shift+Enter 换行）','aria-label':'选文评论'});
       popup.setAttribute('data-tabstop','1');
       const button = this.h(event.doc,'button',{type:'button'},'添加到对话');
+      this.protectCommentEditor(comment,event.reader._window,()=>button.click());
       popup.append(comment,button);
       button.addEventListener('click',()=>{
+        if(button.disabled)return;
         const key = String(event.reader.itemID || event.reader._item?.id);
         const page = event.params.annotation?.pageLabel;
         const state = this.drafts.get(key) || {question:'',context:'',annotations:[]};
@@ -342,7 +353,7 @@ var CodexReaderUI = {
     send.addEventListener('click',submit);
     let composing=false;
     question.addEventListener('compositionstart',()=>{composing=true;});question.addEventListener('compositionend',()=>{composing=false;});
-    question.addEventListener('keydown',event=>{if(event.key==='Enter' && !event.shiftKey && !event.isComposing && !composing && event.keyCode!==229){event.preventDefault();submit();}});
+    question.addEventListener('keydown',event=>{if(event.key==='Enter' && !event.shiftKey && !event.isComposing && !composing && event.keyCode!==229){event.preventDefault();if(!event.repeat)submit();}});
     this.installResponseSelection(view);
     copy.addEventListener('click',action(()=>{
       const text=this.transcript(key,title);Zotero.Utilities.Internal.copyTextToClipboard(text);
